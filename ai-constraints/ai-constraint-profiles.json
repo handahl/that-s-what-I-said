@@ -1,0 +1,36 @@
+{ "profiles": { "minimal-prototype": { "description": "Rapid prototyping with essential safety", "constraints": [ "SEC-LOCAL-ONLY", "CQ-TS-001", "SEC-CRYPTO-003\:basic", "QA-TDG-002\:minCoverage=50" ], "ai\_guidance": "Favor speed and local-only testing; skip encryption wrappers unless parsing sensitive info." },
+
+```
+"mvp-secure": {
+  "description": "First deployable secure MVP",
+  "constraints": [
+    "SEC-LOCAL-ONLY",
+    "SEC-CRYPTO-003:strict",
+    "SEC-INPUT-001",
+    "CQ-TS-001",
+    "QA-TDG-002:minCoverage=85",
+    "PRIV-NETWORK-001:none",
+    "PERF-TIMELINE-001",
+    "UX-VIRTUALIZED-001"
+  ],
+  "ai_guidance": "All code must be encrypted-at-rest; no remote API dependencies. Full test coverage for all parsers and encryption."
+},
+
+"future-secure-pki": {
+  "description": "Future profile for YubiKey + hardware-based encryption",
+  "constraints": [
+    "SEC-LOCAL-ONLY",
+    "SEC-CRYPTO-003:strict",
+    "SEC-HW-KEY-001:WebAuthn",
+    "SEC-INPUT-001",
+    "PRIV-NETWORK-001:none",
+    "CQ-TS-001",
+    "QA-TDG-002:minCoverage=95",
+    "UX-EXPORT-001:strict"
+  ],
+  "ai_guidance": "Enforce hardware-backed cryptographic unlocking. No fallback passwords allowed. Prepare proof obligations for secure deletion and decryption consistency."
+}
+```
+
+} }
+
