@@ -31,7 +31,7 @@ export interface ImportResult {
 export interface FileValidationResult {
   isValid: boolean;
   error?: string;
-  fileType?: 'chatgpt' | 'gemini' | 'whatsapp' | 'unknown';
+  fileType?: 'chatgpt' | 'claude' | 'gemini' | 'whatsapp' | 'unknown';
 }
 
 // ChatGPT specific types for parsing
@@ -58,4 +58,32 @@ export interface ChatGPTMessage {
     parts: string[];
   };
   create_time: number;
+}
+
+// Claude specific types for parsing
+export interface ClaudeExport {
+  uuid: string;
+  name: string;
+  summary?: string;
+  model?: string;
+  created_at: string; // ISO 8601 format
+  updated_at: string; // ISO 8601 format
+  chat_messages: ClaudeMessage[];
+}
+
+export interface ClaudeMessage {
+  uuid: string;
+  text: string;
+  sender: 'human' | 'assistant';
+  index: number;
+  created_at: string; // ISO 8601 format
+  updated_at: string; // ISO 8601 format;
+  attachments?: ClaudeAttachment[];
+}
+
+export interface ClaudeAttachment {
+  file_name: string;
+  file_type: string;
+  file_size: number;
+  extracted_content?: string;
 }

@@ -7,14 +7,17 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
 import type { FileValidationResult, ImportResult } from './types';
 import { ChatGPTParser } from './parsers/chatgpt';
+import { ClaudeParser } from './parsers/claude';
 import { DatabaseService } from './database';
 
 export class FileImporter {
   private chatgptParser: ChatGPTParser;
+  private claudeParser: ClaudeParser;
   private database: DatabaseService;
 
   constructor() {
     this.chatgptParser = new ChatGPTParser();
+    this.claudeParser = new ClaudeParser();
     this.database = DatabaseService.getInstance();
   }
 
@@ -52,6 +55,12 @@ export class FileImporter {
       const chatgptValidation = this.chatgptParser.validateChatGPTFile(content);
       if (chatgptValidation.isValid) {
         return { isValid: true, fileType: 'chatgpt' };
+      }
+
+      // Try Claude format
+      const claudeValidation = this.claudeParser.validateClaudeFile(content);
+      if (claudeValidation.isValid) {
+        return { isValid: true, fileType: 'claude' };
       }
 
       // Check for other formats (placeholder for future parsers)
@@ -98,6 +107,9 @@ export class FileImporter {
       switch (validation.fileType) {
         case 'chatgpt':
           result = await this.chatgptParser.parseChatGPT(content);
+          break;
+        case 'claude':
+          result = await this.claudeParser.parseClaude(content);
           break;
         default:
           return {
