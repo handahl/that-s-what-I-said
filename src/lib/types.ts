@@ -87,3 +87,46 @@ export interface ClaudeAttachment {
   file_size: number;
   extracted_content?: string;
 }
+
+// Gemini specific types for parsing
+export interface GeminiExport {
+  conversations: GeminiConversation[];
+}
+
+export interface GeminiConversation {
+  conversation_id: string;
+  conversation_title?: string;
+  create_time: string; // ISO 8601 format
+  update_time: string; // ISO 8601 format
+  messages: GeminiMessage[];
+}
+
+export interface GeminiMessage {
+  id?: string;
+  author: {
+    name: string;
+    email?: string;
+  };
+  create_time: string; // ISO 8601 format
+  text: string;
+  message_type?: string;
+}
+
+// Alternative Gemini format (Google Takeout style)
+export interface GeminiTakeoutExport {
+  id: string;
+  name: string;
+  created_date: string; // ISO 8601 format
+  updated_date: string; // ISO 8601 format
+  messages: GeminiTakeoutMessage[];
+}
+
+export interface GeminiTakeoutMessage {
+  creator: {
+    name: string;
+    email?: string;
+  };
+  created_date: string; // ISO 8601 format
+  content: string;
+  message_id?: string;
+}

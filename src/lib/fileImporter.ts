@@ -8,16 +8,19 @@ import { readTextFile } from '@tauri-apps/api/fs';
 import type { FileValidationResult, ImportResult } from './types';
 import { ChatGPTParser } from './parsers/chatgpt';
 import { ClaudeParser } from './parsers/claude';
+import { GeminiParser } from './parsers/gemini';
 import { DatabaseService } from './database';
 
 export class FileImporter {
   private chatgptParser: ChatGPTParser;
   private claudeParser: ClaudeParser;
+  private geminiParser: GeminiParser;
   private database: DatabaseService;
 
   constructor() {
     this.chatgptParser = new ChatGPTParser();
     this.claudeParser = new ClaudeParser();
+    this.geminiParser = new GeminiParser();
     this.database = DatabaseService.getInstance();
   }
 
@@ -63,13 +66,15 @@ export class FileImporter {
         return { isValid: true, fileType: 'claude' };
       }
 
+      // Try Gemini format
+      const geminiValidation = this.geminiParser.validateGeminiFile(content);
+      if (geminiValidation.isValid) {
+        return { isValid: true, fileType: 'gemini' };
+      }
+
       // Check for other formats (placeholder for future parsers)
       if (this.looksLikeWhatsApp(content)) {
         return { isValid: true, fileType: 'whatsapp' };
-      }
-
-      if (this.looksLikeGemini(content)) {
-        return { isValid: true, fileType: 'gemini' };
       }
 
       return { 
@@ -110,6 +115,9 @@ export class FileImporter {
           break;
         case 'claude':
           result = await this.claudeParser.parseClaude(content);
+          break;
+        case 'gemini':
+          result = await this.geminiParser.parseGemini(content);
           break;
         default:
           return {
@@ -175,17 +183,5 @@ export class FileImporter {
     // Simple heuristic for WhatsApp format
     const whatsappPattern = /\[\d{1,2}\/\d{1,2}\/\d{2,4},\s\d{1,2}:\d{2}\]/;
     return whatsappPattern.test(content);
-  }
-
-  /**
-   * Detect Gemini format (placeholder)
-   */
-  private looksLikeGemini(content: string): boolean {
-    try {
-      const data = JSON.parse(content);
-      return data.conversations && Array.isArray(data.conversations);
-    } catch {
-      return false;
-    }
   }
 }

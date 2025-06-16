@@ -1,5 +1,5 @@
 /**
- * Enhanced tests for file importer service including Claude support
+ * Enhanced tests for file importer service including Gemini support
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -77,6 +77,45 @@ describe('FileImporter', () => {
     ]
   });
 
+  const mockGeminiStandardContent = JSON.stringify({
+    conversations: [
+      {
+        conversation_id: 'gemini-conv-123',
+        conversation_title: 'Test Gemini Conversation',
+        create_time: '2024-01-15T10:30:00.000Z',
+        update_time: '2024-01-15T11:45:00.000Z',
+        messages: [
+          {
+            id: 'msg-1',
+            author: {
+              name: 'user',
+              email: 'user@example.com'
+            },
+            create_time: '2024-01-15T10:30:00.000Z',
+            text: 'Hello Gemini!'
+          }
+        ]
+      }
+    ]
+  });
+
+  const mockGeminiTakeoutContent = JSON.stringify({
+    id: 'takeout-conv-123',
+    name: 'Test Takeout Conversation',
+    created_date: '2024-01-15T10:30:00.000Z',
+    updated_date: '2024-01-15T11:45:00.000Z',
+    messages: [
+      {
+        creator: {
+          name: 'John Doe',
+          email: 'john@example.com'
+        },
+        created_date: '2024-01-15T10:30:00.000Z',
+        content: 'Hello Gemini!'
+      }
+    ]
+  });
+
   describe('File Selection', () => {
     it('should select files using dialog', async () => {
       const mockFiles = ['/path/to/file1.json', '/path/to/file2.json'];
@@ -132,6 +171,24 @@ describe('FileImporter', () => {
       expect(result.fileType).toBe('claude');
     });
 
+    it('should validate Gemini standard format correctly', async () => {
+      (readTextFile as any).mockResolvedValue(mockGeminiStandardContent);
+
+      const result = await importer.validateFile('/path/to/gemini-standard.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('gemini');
+    });
+
+    it('should validate Gemini Takeout format correctly', async () => {
+      (readTextFile as any).mockResolvedValue(mockGeminiTakeoutContent);
+
+      const result = await importer.validateFile('/path/to/gemini-takeout.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('gemini');
+    });
+
     it('should detect WhatsApp format', async () => {
       const whatsappContent = '[14/06/2025, 11:24] John Doe: Hey, how are you?';
       (readTextFile as any).mockResolvedValue(whatsappContent);
@@ -184,23 +241,56 @@ describe('FileImporter', () => {
       expect(result.conversations[0].source_app).toBe('Claude');
     });
 
-    it('should import multiple files', async () => {
+    it('should import Gemini standard format successfully', async () => {
+      (readTextFile as any).mockResolvedValue(mockGeminiStandardContent);
+
+      const result = await importer.importFile('/path/to/gemini-standard.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.conversations[0].source_app).toBe('Google Gemini');
+    });
+
+    it('should import Gemini Takeout format successfully', async () => {
+      (readTextFile as any).mockResolvedValue(mockGeminiTakeoutContent);
+
+      const result = await importer.importFile('/path/to/gemini-takeout.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.conversations[0].source_app).toBe('Google Gemini');
+    });
+
+    it('should import multiple files with different formats', async () => {
       (readTextFile as any).mockImplementation((path) => {
         if (path.includes('chatgpt')) {
           return Promise.resolve(mockChatGPTContent);
         } else if (path.includes('claude')) {
           return Promise.resolve(mockClaudeContent);
+        } else if (path.includes('gemini-standard')) {
+          return Promise.resolve(mockGeminiStandardContent);
+        } else if (path.includes('gemini-takeout')) {
+          return Promise.resolve(mockGeminiTakeoutContent);
         }
         return Promise.reject(new Error('Unknown file'));
       });
 
-      const files = ['/path/to/chatgpt.json', '/path/to/claude.json'];
+      const files = [
+        '/path/to/chatgpt.json',
+        '/path/to/claude.json',
+        '/path/to/gemini-standard.json',
+        '/path/to/gemini-takeout.json'
+      ];
       const result = await importer.importFiles(files);
       
-      expect(result.conversations).toHaveLength(2);
-      expect(result.messages).toHaveLength(2);
+      expect(result.conversations).toHaveLength(4);
+      expect(result.messages).toHaveLength(4);
       expect(result.conversations[0].source_app).toBe('ChatGPT');
       expect(result.conversations[1].source_app).toBe('Claude');
+      expect(result.conversations[2].source_app).toBe('Google Gemini');
+      expect(result.conversations[3].source_app).toBe('Google Gemini');
     });
 
     it('should handle import errors gracefully', async () => {
@@ -229,33 +319,16 @@ describe('FileImporter', () => {
     });
   });
 
-  describe('Format Detection', () => {
-    it('should detect Gemini format', async () => {
-      const geminiContent = JSON.stringify({
-        conversations: [
-          {
-            id: 'conv-1',
-            name: 'Test Chat',
-            messages: []
-          }
-        ]
-      });
-      (readTextFile as any).mockResolvedValue(geminiContent);
-
-      const result = await importer.validateFile('/path/to/gemini.json');
-      
-      expect(result.isValid).toBe(true);
-      expect(result.fileType).toBe('gemini');
-    });
-
-    it('should prioritize ChatGPT detection over Claude for ambiguous files', async () => {
-      // Create a file that could potentially match both formats
+  describe('Format Detection Priority', () => {
+    it('should prioritize ChatGPT detection over other formats', async () => {
+      // Create a file that could potentially match multiple formats
       const ambiguousContent = JSON.stringify({
         conversation_id: 'test-123',
         title: 'Test',
         mapping: {},
         uuid: 'also-has-uuid',
-        chat_messages: []
+        chat_messages: [],
+        conversations: []
       });
       
       (readTextFile as any).mockResolvedValue(ambiguousContent);
@@ -265,6 +338,41 @@ describe('FileImporter', () => {
       // Should detect as ChatGPT since it's checked first
       expect(result.isValid).toBe(true);
       expect(result.fileType).toBe('chatgpt');
+    });
+
+    it('should fall back to Claude detection when ChatGPT fails', async () => {
+      const claudeOnlyContent = JSON.stringify({
+        uuid: 'claude-123',
+        name: 'Claude Chat',
+        created_at: '2024-01-15T10:30:00.000Z',
+        updated_at: '2024-01-15T11:45:00.000Z',
+        chat_messages: []
+      });
+      
+      (readTextFile as any).mockResolvedValue(claudeOnlyContent);
+
+      const result = await importer.validateFile('/path/to/claude-only.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('claude');
+    });
+
+    it('should fall back to Gemini detection when others fail', async () => {
+      const geminiOnlyContent = JSON.stringify({
+        conversations: [{
+          conversation_id: 'gemini-123',
+          create_time: '2024-01-15T10:30:00.000Z',
+          update_time: '2024-01-15T11:45:00.000Z',
+          messages: []
+        }]
+      });
+      
+      (readTextFile as any).mockResolvedValue(geminiOnlyContent);
+
+      const result = await importer.validateFile('/path/to/gemini-only.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('gemini');
     });
   });
 
@@ -280,19 +388,29 @@ describe('FileImporter', () => {
     });
 
     it('should handle parser exceptions', async () => {
-      (readTextFile as any).mockResolvedValue(mockClaudeContent);
+      (readTextFile as any).mockResolvedValue(mockGeminiStandardContent);
       
       // Mock parser to throw an error
-      const originalParseClaude = importer['claudeParser'].parseClaude;
-      importer['claudeParser'].parseClaude = vi.fn().mockRejectedValue(new Error('Parser error'));
+      const originalParseGemini = importer['geminiParser'].parseGemini;
+      importer['geminiParser'].parseGemini = vi.fn().mockRejectedValue(new Error('Parser error'));
 
-      const result = await importer.importFile('/path/to/claude.json');
+      const result = await importer.importFile('/path/to/gemini.json');
       
       expect(result.conversations).toHaveLength(0);
       expect(result.errors).toContain('Import failed: Error: Parser error');
       
       // Restore original method
-      importer['claudeParser'].parseClaude = originalParseClaude;
+      importer['geminiParser'].parseGemini = originalParseGemini;
+    });
+
+    it('should handle malformed JSON gracefully', async () => {
+      (readTextFile as any).mockResolvedValue('{ invalid json }');
+
+      const result = await importer.importFile('/path/to/malformed.json');
+      
+      expect(result.conversations).toHaveLength(0);
+      expect(result.messages).toHaveLength(0);
+      expect(result.errors.length).toBeGreaterThan(0);
     });
   });
 });
