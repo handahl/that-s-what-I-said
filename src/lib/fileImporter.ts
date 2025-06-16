@@ -1,29 +1,29 @@
 /**
- * File import service with validation and processing
- * Handles secure file selection and format detection
+ * Refactored file import service with modular parser architecture
+ * Implements centralized validation, error handling, and comprehensive metrics
  */
 
 import { open } from '@tauri-apps/plugin-dialog';
 import { readTextFile } from '@tauri-apps/api/fs';
-import type { FileValidationResult, ImportResult } from './types';
-import { ChatGPTParser } from './parsers/chatgpt';
-import { ClaudeParser } from './parsers/claude';
-import { GeminiParser } from './parsers/gemini';
-import { QwenParser } from './parsers/qwen';
+import type { 
+  FileValidationResult, 
+  ImportResult, 
+  ImportMetadata,
+  ImportError,
+  SupportedFileType
+} from './types';
+import { ParserRegistry } from './parserRegistry';
+import { ImportValidationService } from './importValidation';
 import { DatabaseService } from './database';
 
 export class FileImporter {
-  private chatgptParser: ChatGPTParser;
-  private claudeParser: ClaudeParser;
-  private geminiParser: GeminiParser;
-  private qwenParser: QwenParser;
+  private parserRegistry: ParserRegistry;
+  private validation: ImportValidationService;
   private database: DatabaseService;
 
   constructor() {
-    this.chatgptParser = new ChatGPTParser();
-    this.claudeParser = new ClaudeParser();
-    this.geminiParser = new GeminiParser();
-    this.qwenParser = new QwenParser();
+    this.parserRegistry = ParserRegistry.getInstance();
+    this.validation = ImportValidationService.getInstance();
     this.database = DatabaseService.getInstance();
   }
 
@@ -51,126 +51,263 @@ export class FileImporter {
   }
 
   /**
-   * Validate file format and detect type
+   * Validate file format with enhanced detection and fallback logic
    */
   public async validateFile(filePath: string): Promise<FileValidationResult> {
     try {
       const content = await readTextFile(filePath);
       
-      // Try ChatGPT format first
-      const chatgptValidation = this.chatgptParser.validateChatGPTFile(content);
-      if (chatgptValidation.isValid) {
-        return { isValid: true, fileType: 'chatgpt' };
+      // Perform basic validation first
+      const sizeError = this.validation.validateFileSize(content, filePath);
+      if (sizeError) {
+        return {
+          isValid: false,
+          error: sizeError.message,
+          fileType: 'unknown',
+          confidence: 0
+        };
       }
 
-      // Try Claude format
-      const claudeValidation = this.claudeParser.validateClaudeFile(content);
-      if (claudeValidation.isValid) {
-        return { isValid: true, fileType: 'claude' };
+      const encodingError = this.validation.validateEncoding(content, filePath);
+      if (encodingError && encodingError.severity === 'high') {
+        return {
+          isValid: false,
+          error: encodingError.message,
+          fileType: 'unknown',
+          confidence: 0
+        };
       }
 
-      // Try Gemini format
-      const geminiValidation = this.geminiParser.validateGeminiFile(content);
-      if (geminiValidation.isValid) {
-        return { isValid: true, fileType: 'gemini' };
+      const jsonError = this.validation.validateJSONStructure(content, filePath);
+      if (jsonError) {
+        // JSON validation failed, but might be text format
+        // Continue with format detection
       }
 
-      // Try Qwen format
-      const qwenValidation = this.qwenParser.validateQwenFile(content);
-      if (qwenValidation.isValid) {
-        return { isValid: true, fileType: 'qwen' };
+      // Use parser registry for format detection
+      const result = this.parserRegistry.detectFileFormat(content, filePath);
+      
+      // Add encoding warning if present
+      if (encodingError && result.isValid) {
+        result.warning = encodingError.message;
       }
 
-      // Check for other formats (placeholder for future parsers)
-      if (this.looksLikeWhatsApp(content)) {
-        return { isValid: true, fileType: 'whatsapp' };
-      }
-
-      return { 
-        isValid: false, 
-        error: 'Unsupported file format',
-        fileType: 'unknown'
-      };
+      return result;
 
     } catch (error) {
       return { 
         isValid: false, 
-        error: `File read error: ${error}` 
+        error: `File read error: ${error}`,
+        fileType: 'unknown',
+        confidence: 0
       };
     }
   }
 
   /**
-   * Import and process a file
+   * Import and process a single file with comprehensive error handling
    */
   public async importFile(filePath: string): Promise<ImportResult> {
-    const validation = await this.validateFile(filePath);
-    
-    if (!validation.isValid) {
-      return {
-        conversations: [],
-        messages: [],
-        errors: [validation.error || 'File validation failed']
-      };
-    }
+    const startTime = Date.now();
+    const metadata: ImportMetadata = {
+      total_files_processed: 1,
+      successful_imports: 0,
+      failed_imports: 0,
+      total_conversations: 0,
+      total_messages: 0,
+      processing_time_ms: 0,
+      detected_formats: {},
+      parser_fallbacks: 0
+    };
+
+    const result: ImportResult = {
+      conversations: [],
+      messages: [],
+      errors: [],
+      warnings: [],
+      metadata
+    };
 
     try {
-      const content = await readTextFile(filePath);
-      let result: ImportResult;
+      // Validate file format
+      const validation = await this.validateFile(filePath);
+      
+      if (!validation.isValid) {
+        result.errors.push(validation.error || 'File validation failed');
+        metadata.failed_imports = 1;
+        metadata.processing_time_ms = Date.now() - startTime;
+        return result;
+      }
 
-      switch (validation.fileType) {
-        case 'chatgpt':
-          result = await this.chatgptParser.parseChatGPT(content);
-          break;
-        case 'claude':
-          result = await this.claudeParser.parseClaude(content);
-          break;
-        case 'gemini':
-          result = await this.geminiParser.parseGemini(content);
-          break;
-        case 'qwen':
-          result = await this.qwenParser.parseQwen(content);
-          break;
-        default:
-          return {
-            conversations: [],
-            messages: [],
-            errors: [`Unsupported file type: ${validation.fileType}`]
-          };
+      // Track format detection
+      if (validation.fileType && validation.fileType !== 'unknown') {
+        metadata.detected_formats[validation.fileType] = 1;
+      }
+
+      if (validation.fallbackAttempted) {
+        metadata.parser_fallbacks = 1;
+      }
+
+      if (validation.warning) {
+        result.warnings.push(validation.warning);
+      }
+
+      // Get appropriate parser
+      const parser = this.parserRegistry.getParser(validation.fileType!);
+      if (!parser) {
+        result.errors.push(`No parser available for file type: ${validation.fileType}`);
+        metadata.failed_imports = 1;
+        metadata.processing_time_ms = Date.now() - startTime;
+        return result;
+      }
+
+      // Read and parse file content
+      const content = await readTextFile(filePath);
+      const parseResult = await parser.parseContent(content);
+
+      // Validate parsed data
+      const validationErrors = this.validateParsedData(parseResult, filePath);
+      result.errors.push(...validationErrors.map(e => e.message));
+
+      if (validationErrors.some(e => e.severity === 'high' || e.severity === 'critical')) {
+        metadata.failed_imports = 1;
+        metadata.processing_time_ms = Date.now() - startTime;
+        return result;
+      }
+
+      // Merge results
+      result.conversations = parseResult.conversations;
+      result.messages = parseResult.messages;
+      result.errors.push(...parseResult.errors);
+      
+      if ('warnings' in parseResult) {
+        result.warnings.push(...parseResult.warnings);
       }
 
       // Save to database
       await this.saveImportResult(result);
-      
-      return result;
+
+      // Update metadata
+      metadata.successful_imports = 1;
+      metadata.total_conversations = result.conversations.length;
+      metadata.total_messages = result.messages.length;
 
     } catch (error) {
-      return {
-        conversations: [],
-        messages: [],
-        errors: [`Import failed: ${error}`]
-      };
+      result.errors.push(`Import failed: ${error}`);
+      metadata.failed_imports = 1;
+    } finally {
+      metadata.processing_time_ms = Date.now() - startTime;
     }
+
+    return result;
   }
 
   /**
-   * Import multiple files
+   * Import multiple files with aggregate metrics and error handling
    */
   public async importFiles(filePaths: string[]): Promise<ImportResult> {
-    const combinedResult: ImportResult = {
+    const startTime = Date.now();
+    const aggregateResult: ImportResult = {
       conversations: [],
       messages: [],
-      errors: []
+      errors: [],
+      warnings: [],
+      metadata: {
+        total_files_processed: filePaths.length,
+        successful_imports: 0,
+        failed_imports: 0,
+        total_conversations: 0,
+        total_messages: 0,
+        processing_time_ms: 0,
+        detected_formats: {},
+        parser_fallbacks: 0
+      }
     };
 
+    const fileResults: Array<{ filePath: string; result: ImportResult }> = [];
+
+    // Process each file
     for (const filePath of filePaths) {
-      const result = await this.importFile(filePath);
-      combinedResult.conversations.push(...result.conversations);
-      combinedResult.messages.push(...result.messages);
-      combinedResult.errors.push(...result.errors);
+      try {
+        const result = await this.importFile(filePath);
+        fileResults.push({ filePath, result });
+
+        // Aggregate results
+        aggregateResult.conversations.push(...result.conversations);
+        aggregateResult.messages.push(...result.messages);
+        aggregateResult.errors.push(...result.errors.map(e => `${filePath}: ${e}`));
+        aggregateResult.warnings.push(...result.warnings.map(w => `${filePath}: ${w}`));
+
+        // Aggregate metadata
+        if (result.metadata.successful_imports > 0) {
+          aggregateResult.metadata.successful_imports++;
+        } else {
+          aggregateResult.metadata.failed_imports++;
+        }
+
+        aggregateResult.metadata.total_conversations += result.metadata.total_conversations;
+        aggregateResult.metadata.total_messages += result.metadata.total_messages;
+        aggregateResult.metadata.parser_fallbacks += result.metadata.parser_fallbacks;
+
+        // Merge detected formats
+        for (const [format, count] of Object.entries(result.metadata.detected_formats)) {
+          aggregateResult.metadata.detected_formats[format] = 
+            (aggregateResult.metadata.detected_formats[format] || 0) + count;
+        }
+
+      } catch (error) {
+        aggregateResult.errors.push(`${filePath}: ${error}`);
+        aggregateResult.metadata.failed_imports++;
+      }
     }
 
-    return combinedResult;
+    aggregateResult.metadata.processing_time_ms = Date.now() - startTime;
+
+    return aggregateResult;
+  }
+
+  /**
+   * Validate parsed data against security and business rules
+   */
+  private validateParsedData(result: ImportResult, filePath: string): ImportError[] {
+    const errors: ImportError[] = [];
+
+    // Validate conversation count
+    const convError = this.validation.validateConversationCount(result.conversations.length, filePath);
+    if (convError) errors.push(convError);
+
+    // Validate message count
+    const msgError = this.validation.validateMessageCount(result.messages.length, filePath);
+    if (msgError) errors.push(msgError);
+
+    // Validate individual messages
+    for (const message of result.messages) {
+      // Validate content length
+      const contentError = this.validation.validateContentLength(message.content, filePath);
+      if (contentError) errors.push(contentError);
+
+      // Validate timestamp
+      const timestampError = this.validation.validateTimestamp(message.timestamp_utc, filePath);
+      if (timestampError) errors.push(timestampError);
+
+      // Sanitize content
+      message.content = this.validation.sanitizeContent(message.content, 1024 * 1024);
+      message.author = this.validation.sanitizeContent(message.author, 100);
+    }
+
+    // Validate conversations
+    for (const conversation of result.conversations) {
+      conversation.display_name = this.validation.sanitizeContent(conversation.display_name, 500);
+      
+      // Validate time bounds
+      const startError = this.validation.validateTimestamp(conversation.start_time, filePath);
+      if (startError) errors.push(startError);
+      
+      const endError = this.validation.validateTimestamp(conversation.end_time, filePath);
+      if (endError) errors.push(endError);
+    }
+
+    return errors;
   }
 
   /**
@@ -189,11 +326,20 @@ export class FileImporter {
   }
 
   /**
-   * Detect WhatsApp format (placeholder)
+   * Get import statistics and health metrics
    */
-  private looksLikeWhatsApp(content: string): boolean {
-    // Simple heuristic for WhatsApp format
-    const whatsappPattern = /\[\d{1,2}\/\d{1,2}\/\d{2,4},\s\d{1,2}:\d{2}\]/;
-    return whatsappPattern.test(content);
+  public getImportStatistics(): {
+    supportedFormats: SupportedFileType[];
+    validationConfig: any;
+    parserStatus: Record<string, boolean>;
+  } {
+    return {
+      supportedFormats: this.parserRegistry.getAvailableParsers(),
+      validationConfig: this.validation.getConfig(),
+      parserStatus: this.parserRegistry.getAvailableParsers().reduce((status, format) => {
+        status[format] = this.parserRegistry.getParser(format) !== null;
+        return status;
+      }, {} as Record<string, boolean>)
+    };
   }
 }

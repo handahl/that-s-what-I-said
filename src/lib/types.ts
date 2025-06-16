@@ -26,12 +26,58 @@ export interface ImportResult {
   conversations: Conversation[];
   messages: ChatMessage[];
   errors: string[];
+  warnings: string[];
+  metadata: ImportMetadata;
+}
+
+export interface ImportMetadata {
+  total_files_processed: number;
+  successful_imports: number;
+  failed_imports: number;
+  total_conversations: number;
+  total_messages: number;
+  processing_time_ms: number;
+  detected_formats: Record<string, number>;
+  parser_fallbacks: number;
 }
 
 export interface FileValidationResult {
   isValid: boolean;
   error?: string;
-  fileType?: 'chatgpt' | 'claude' | 'gemini' | 'qwen' | 'whatsapp' | 'unknown';
+  warning?: string;
+  fileType?: SupportedFileType;
+  confidence: number; // 0-100, confidence in format detection
+  fallbackAttempted?: boolean;
+}
+
+export type SupportedFileType = 'chatgpt' | 'claude' | 'gemini' | 'qwen' | 'whatsapp' | 'unknown';
+
+export interface ParserInterface {
+  readonly name: string;
+  readonly supportedTypes: SupportedFileType[];
+  
+  validateFile(content: string): FileValidationResult;
+  parseContent(content: string): Promise<ImportResult>;
+  getFormatConfidence(content: string): number;
+}
+
+export interface ImportValidationConfig {
+  maxFileSize: number;
+  maxConversations: number;
+  maxMessages: number;
+  maxContentLength: number;
+  allowedFileTypes: SupportedFileType[];
+  enableFallbackDetection: boolean;
+}
+
+export interface ImportError {
+  type: 'validation' | 'parsing' | 'database' | 'security';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  file?: string;
+  parser?: string;
+  timestamp: number;
+  details?: Record<string, any>;
 }
 
 // ChatGPT specific types for parsing
