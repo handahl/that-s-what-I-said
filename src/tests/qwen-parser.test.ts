@@ -181,6 +181,7 @@ This will print numbers 0 through 4.`;
       expect(result.messages).toHaveLength(2);
       // Content should be normalized
       expect(result.messages[0].content).toContain(''');
+      )
       expect(result.messages[0].content).toContain('"');
     });
 
