@@ -9,18 +9,21 @@ import type { FileValidationResult, ImportResult } from './types';
 import { ChatGPTParser } from './parsers/chatgpt';
 import { ClaudeParser } from './parsers/claude';
 import { GeminiParser } from './parsers/gemini';
+import { QwenParser } from './parsers/qwen';
 import { DatabaseService } from './database';
 
 export class FileImporter {
   private chatgptParser: ChatGPTParser;
   private claudeParser: ClaudeParser;
   private geminiParser: GeminiParser;
+  private qwenParser: QwenParser;
   private database: DatabaseService;
 
   constructor() {
     this.chatgptParser = new ChatGPTParser();
     this.claudeParser = new ClaudeParser();
     this.geminiParser = new GeminiParser();
+    this.qwenParser = new QwenParser();
     this.database = DatabaseService.getInstance();
   }
 
@@ -72,6 +75,12 @@ export class FileImporter {
         return { isValid: true, fileType: 'gemini' };
       }
 
+      // Try Qwen format
+      const qwenValidation = this.qwenParser.validateQwenFile(content);
+      if (qwenValidation.isValid) {
+        return { isValid: true, fileType: 'qwen' };
+      }
+
       // Check for other formats (placeholder for future parsers)
       if (this.looksLikeWhatsApp(content)) {
         return { isValid: true, fileType: 'whatsapp' };
@@ -118,6 +127,9 @@ export class FileImporter {
           break;
         case 'gemini':
           result = await this.geminiParser.parseGemini(content);
+          break;
+        case 'qwen':
+          result = await this.qwenParser.parseQwen(content);
           break;
         default:
           return {

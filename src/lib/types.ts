@@ -31,7 +31,7 @@ export interface ImportResult {
 export interface FileValidationResult {
   isValid: boolean;
   error?: string;
-  fileType?: 'chatgpt' | 'claude' | 'gemini' | 'whatsapp' | 'unknown';
+  fileType?: 'chatgpt' | 'claude' | 'gemini' | 'qwen' | 'whatsapp' | 'unknown';
 }
 
 // ChatGPT specific types for parsing
@@ -129,4 +129,43 @@ export interface GeminiTakeoutMessage {
   created_date: string; // ISO 8601 format
   content: string;
   message_id?: string;
+}
+
+// Qwen (Alibaba LLM) specific types for parsing
+export interface QwenExport {
+  conversation_id?: string;
+  session_id?: string;
+  title?: string;
+  name?: string;
+  created_time?: string | number;
+  updated_time?: string | number;
+  messages?: QwenMessage[];
+  chat_history?: QwenMessage[];
+  dialogue?: QwenMessage[];
+}
+
+export interface QwenMessage {
+  id?: string;
+  message_id?: string;
+  timestamp?: string | number;
+  time?: string | number;
+  created_at?: string | number;
+  role?: string;
+  sender?: string;
+  author?: string;
+  content?: string;
+  text?: string;
+  message?: string;
+  type?: string;
+  message_type?: string;
+  model?: string;
+  model_name?: string;
+}
+
+// Qwen text log format (flat file)
+export interface QwenTextLogEntry {
+  timestamp: string;
+  role: string;
+  content: string;
+  raw_line: string;
 }

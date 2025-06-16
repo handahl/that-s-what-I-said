@@ -1,5 +1,5 @@
 /**
- * Enhanced tests for file importer service including Gemini support
+ * Enhanced tests for file importer service including Qwen support
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -116,6 +116,39 @@ describe('FileImporter', () => {
     ]
   });
 
+  const mockQwenJSONContent = JSON.stringify({
+    conversation_id: 'qwen-conv-123',
+    title: 'Test Qwen Conversation',
+    created_time: '2024-01-15T10:30:00.000Z',
+    updated_time: '2024-01-15T11:45:00.000Z',
+    messages: [
+      {
+        id: 'msg-1',
+        role: 'user',
+        content: 'Hello Qwen!',
+        timestamp: '2024-01-15T10:30:00.000Z'
+      }
+    ]
+  });
+
+  const mockQwenTextLogContent = `2024-01-15 10:30:00 user: Hello Qwen!
+2024-01-15 10:30:30 assistant: Hello! How can I help you today?`;
+
+  const mockQwenChineseContent = JSON.stringify({
+    conversation_id: 'qwen-chinese-123',
+    title: '与通义千问的对话',
+    created_time: '2024-01-15T10:30:00.000Z',
+    updated_time: '2024-01-15T11:45:00.000Z',
+    messages: [
+      {
+        id: 'msg-1',
+        role: '用户',
+        content: '你好，通义千问！',
+        timestamp: '2024-01-15T10:30:00.000Z'
+      }
+    ]
+  });
+
   describe('File Selection', () => {
     it('should select files using dialog', async () => {
       const mockFiles = ['/path/to/file1.json', '/path/to/file2.json'];
@@ -187,6 +220,33 @@ describe('FileImporter', () => {
       
       expect(result.isValid).toBe(true);
       expect(result.fileType).toBe('gemini');
+    });
+
+    it('should validate Qwen JSON format correctly', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenJSONContent);
+
+      const result = await importer.validateFile('/path/to/qwen.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('qwen');
+    });
+
+    it('should validate Qwen text log format correctly', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenTextLogContent);
+
+      const result = await importer.validateFile('/path/to/qwen.txt');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('qwen');
+    });
+
+    it('should validate Qwen Chinese content correctly', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenChineseContent);
+
+      const result = await importer.validateFile('/path/to/qwen-chinese.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('qwen');
     });
 
     it('should detect WhatsApp format', async () => {
@@ -263,6 +323,41 @@ describe('FileImporter', () => {
       expect(result.conversations[0].source_app).toBe('Google Gemini');
     });
 
+    it('should import Qwen JSON format successfully', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenJSONContent);
+
+      const result = await importer.importFile('/path/to/qwen.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.conversations[0].source_app).toBe('Qwen');
+    });
+
+    it('should import Qwen text log format successfully', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenTextLogContent);
+
+      const result = await importer.importFile('/path/to/qwen.txt');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(2);
+      expect(result.errors).toHaveLength(0);
+      expect(result.conversations[0].source_app).toBe('Qwen');
+      expect(result.conversations[0].tags).toContain('text-log');
+    });
+
+    it('should import Qwen Chinese content successfully', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenChineseContent);
+
+      const result = await importer.importFile('/path/to/qwen-chinese.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+      expect(result.conversations[0].source_app).toBe('Qwen');
+      expect(result.conversations[0].display_name).toBe('与通义千问的对话');
+    });
+
     it('should import multiple files with different formats', async () => {
       (readTextFile as any).mockImplementation((path) => {
         if (path.includes('chatgpt')) {
@@ -273,6 +368,10 @@ describe('FileImporter', () => {
           return Promise.resolve(mockGeminiStandardContent);
         } else if (path.includes('gemini-takeout')) {
           return Promise.resolve(mockGeminiTakeoutContent);
+        } else if (path.includes('qwen-json')) {
+          return Promise.resolve(mockQwenJSONContent);
+        } else if (path.includes('qwen-text')) {
+          return Promise.resolve(mockQwenTextLogContent);
         }
         return Promise.reject(new Error('Unknown file'));
       });
@@ -281,22 +380,26 @@ describe('FileImporter', () => {
         '/path/to/chatgpt.json',
         '/path/to/claude.json',
         '/path/to/gemini-standard.json',
-        '/path/to/gemini-takeout.json'
+        '/path/to/gemini-takeout.json',
+        '/path/to/qwen-json.json',
+        '/path/to/qwen-text.txt'
       ];
       const result = await importer.importFiles(files);
       
-      expect(result.conversations).toHaveLength(4);
-      expect(result.messages).toHaveLength(4);
+      expect(result.conversations).toHaveLength(6);
+      expect(result.messages).toHaveLength(7); // qwen-text has 2 messages
       expect(result.conversations[0].source_app).toBe('ChatGPT');
       expect(result.conversations[1].source_app).toBe('Claude');
       expect(result.conversations[2].source_app).toBe('Google Gemini');
       expect(result.conversations[3].source_app).toBe('Google Gemini');
+      expect(result.conversations[4].source_app).toBe('Qwen');
+      expect(result.conversations[5].source_app).toBe('Qwen');
     });
 
     it('should handle import errors gracefully', async () => {
       (readTextFile as any).mockImplementation((path) => {
         if (path.includes('valid')) {
-          return Promise.resolve(mockChatGPTContent);
+          return Promise.resolve(mockQwenJSONContent);
         }
         return Promise.reject(new Error('Read error'));
       });
@@ -328,7 +431,8 @@ describe('FileImporter', () => {
         mapping: {},
         uuid: 'also-has-uuid',
         chat_messages: [],
-        conversations: []
+        conversations: [],
+        messages: []
       });
       
       (readTextFile as any).mockResolvedValue(ambiguousContent);
@@ -374,6 +478,61 @@ describe('FileImporter', () => {
       expect(result.isValid).toBe(true);
       expect(result.fileType).toBe('gemini');
     });
+
+    it('should fall back to Qwen detection when others fail', async () => {
+      const qwenOnlyContent = JSON.stringify({
+        session_id: 'qwen-123',
+        chat_history: [{
+          role: 'user',
+          content: 'Test message'
+        }]
+      });
+      
+      (readTextFile as any).mockResolvedValue(qwenOnlyContent);
+
+      const result = await importer.validateFile('/path/to/qwen-only.json');
+      
+      expect(result.isValid).toBe(true);
+      expect(result.fileType).toBe('qwen');
+    });
+  });
+
+  describe('Encoding Handling', () => {
+    it('should handle BOM in Qwen files', async () => {
+      const contentWithBOM = '\uFEFF' + mockQwenJSONContent;
+      (readTextFile as any).mockResolvedValue(contentWithBOM);
+
+      const result = await importer.importFile('/path/to/qwen-bom.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should handle encoding issues in Qwen files', async () => {
+      const contentWithEncodingIssues = mockQwenJSONContent
+        .replace(/'/g, 'â€™')  // Simulate mojibake
+        .replace(/"/g, 'â€œ');
+      
+      (readTextFile as any).mockResolvedValue(contentWithEncodingIssues);
+
+      const result = await importer.importFile('/path/to/qwen-encoding.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should handle mixed language content', async () => {
+      (readTextFile as any).mockResolvedValue(mockQwenChineseContent);
+
+      const result = await importer.importFile('/path/to/qwen-chinese.json');
+      
+      expect(result.conversations).toHaveLength(1);
+      expect(result.messages).toHaveLength(1);
+      expect(result.conversations[0].display_name).toContain('通义千问');
+      expect(result.messages[0].content).toContain('你好');
+    });
   });
 
   describe('Error Handling', () => {
@@ -388,19 +547,19 @@ describe('FileImporter', () => {
     });
 
     it('should handle parser exceptions', async () => {
-      (readTextFile as any).mockResolvedValue(mockGeminiStandardContent);
+      (readTextFile as any).mockResolvedValue(mockQwenJSONContent);
       
       // Mock parser to throw an error
-      const originalParseGemini = importer['geminiParser'].parseGemini;
-      importer['geminiParser'].parseGemini = vi.fn().mockRejectedValue(new Error('Parser error'));
+      const originalParseQwen = importer['qwenParser'].parseQwen;
+      importer['qwenParser'].parseQwen = vi.fn().mockRejectedValue(new Error('Parser error'));
 
-      const result = await importer.importFile('/path/to/gemini.json');
+      const result = await importer.importFile('/path/to/qwen.json');
       
       expect(result.conversations).toHaveLength(0);
       expect(result.errors).toContain('Import failed: Error: Parser error');
       
       // Restore original method
-      importer['geminiParser'].parseGemini = originalParseGemini;
+      importer['qwenParser'].parseQwen = originalParseQwen;
     });
 
     it('should handle malformed JSON gracefully', async () => {
