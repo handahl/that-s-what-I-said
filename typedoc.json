@@ -1,0 +1,12 @@
+{
+  "entryPoints": ["./src/lib"],
+  "out": "./docs/api",
+  "theme": "default",
+  "name": "That's What I Said - API Documentation",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeExternals": true,
+  "readme": "./README.md",
+  "plugin": ["typedoc-plugin-markdown"]
+}
