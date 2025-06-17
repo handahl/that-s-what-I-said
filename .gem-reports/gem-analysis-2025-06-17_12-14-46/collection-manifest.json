@@ -1,0 +1,63 @@
+{
+  "expected_reports": [
+    "report-gem1-security.json",
+    "report-gem2-validation.json",
+    "report-gem3-code.json",
+    "report-gem4-review.json"
+  ],
+  "collection_session": {
+    "timestamp": "2025-06-17_12-14-46",
+    "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-14-46",
+    "source_gems_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems",
+    "collection_time": "2025-06-17T12:14:47.009Z",
+    "session_id": "gem-analysis-2025-06-17_12-14-46"
+  },
+  "collected_reports": [
+    {
+      "size_bytes": 4664,
+      "gem_name": "Security-Testing",
+      "collected_filename": "01-Security-Testing-20250617-121446.json",
+      "original_filename": "report-gem1-security.json",
+      "source_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems\\1 Security Testing\\report-gem1-security.json",
+      "last_modified": "2025-06-17T11:58:13.794Z",
+      "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-14-46\\01-Security-Testing-20250617-121446.json",
+      "gem_number": "01"
+    },
+    {
+      "size_bytes": 4057,
+      "gem_name": "Technical-Validation",
+      "collected_filename": "02-Technical-Validation-20250617-121446.json",
+      "original_filename": "report-gem2-validation.json",
+      "source_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems\\2 Validation\\report-gem2-validation.json",
+      "last_modified": "2025-06-17T12:06:01.610Z",
+      "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-14-46\\02-Technical-Validation-20250617-121446.json",
+      "gem_number": "02"
+    },
+    {
+      "size_bytes": 1488,
+      "gem_name": "Code-Quality",
+      "collected_filename": "03-Code-Quality-20250617-121447.json",
+      "original_filename": "report-gem3-code.json",
+      "source_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems\\3 Code Quality\\report-gem3-code.json",
+      "last_modified": "2025-06-17T12:07:13.975Z",
+      "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-14-46\\03-Code-Quality-20250617-121447.json",
+      "gem_number": "03"
+    },
+    {
+      "size_bytes": 1488,
+      "gem_name": "Peer-Review",
+      "collected_filename": "04-Peer-Review-20250617-121447.json",
+      "original_filename": "report-gem4-review.json",
+      "source_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems\\4 Peer Review\\report-gem4-review.json",
+      "last_modified": "2025-06-17T12:08:29.455Z",
+      "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-14-46\\04-Peer-Review-20250617-121447.json",
+      "gem_number": "04"
+    }
+  ],
+  "summary": {
+    "total_size_bytes": 11697,
+    "total_expected": 4,
+    "total_collected": 4,
+    "total_missing": 0
+  }
+}
