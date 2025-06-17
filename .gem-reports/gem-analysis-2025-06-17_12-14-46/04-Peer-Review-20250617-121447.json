@@ -1,36 +1,55 @@
 {
-  "sanitization_report": {
-    "gem_identity": "sanitization_specialist",
+  "critical_review_report": {
+    "gem_identity": "critical_peer_reviewer",
     "constraint_version_read": "v2.3",
-    "timestamp": "2025-06-17T12:06:41Z",
-    "input_sanitization": {
-      "user_input_validated": true,
-      "sanitization_libraries": [],
-      "validation_patterns": [
-        "size_limits",
-        "json_schema_validation",
-        "timestamp_validation",
-        "content_length_limits",
-        "encoding_normalization"
+    "timestamp": "2025-06-17T12:07:09Z",
+    "architecture_analysis": {
+      "design_quality": "EXCELLENT",
+      "pattern_usage": "APPROPRIATE",
+      "consistency_score": 95,
+      "scalability_concerns": [
+        "While virtualized scrolling and database indexing are implemented, long-term performance with extremely large datasets (millions of messages/conversations) should be continuously monitored.",
+        "The roadmap mentions graph visualization for v1.0. Depending on the graph library chosen and the complexity of the relationships, this could introduce performance bottlenecks if not carefully optimized for very large datasets."
+      ]
+    },
+    "code_quality_assessment": {
+      "readability_score": 90,
+      "maintainability_score": 90,
+      "complexity_metrics": {
+        "cyclomatic_complexity": "N/A (requires code analysis)",
+        "cognitive_complexity": "N/A (requires code analysis)"
+      },
+      "error_handling": "COMPREHENSIVE"
+    },
+    "performance_evaluation": {
+      "potential_bottlenecks": [
+        "Initial parsing of extremely large multi-format ZIP archives could be CPU/memory intensive.",
+        "Full-text search performance on very large, unindexed text fields might become a bottleneck."
       ],
-      "potential_bypasses": []
+      "optimization_opportunities": [
+        "Investigate Web Workers for background parsing of large files to keep the UI responsive.",
+        "Explore incremental parsing and indexing for file imports.",
+        "Consider using a dedicated full-text search engine or highly optimized SQLite FTS5 for global search."
+      ],
+      "resource_usage": "EFFICIENT",
+      "scalability_rating": "HIGH"
     },
-    "code_quality": {
-      "formatting_compliance": "PASS",
-      "naming_conventions": "PASS",
-      "documentation_quality": "GOOD",
-      "organization_score": 90
-    },
-    "xss_prevention": {
-      "html_sanitization": "NOT_DIRECTLY_IMPLEMENTED_IN_PARSERS",
-      "dangerous_patterns": [],
-      "csp_compliance": "NOT_APPLICABLE_FOR_PARSERS",
-      "dom_safety": "NOT_APPLICABLE_FOR_PARSERS"
-    },
-    "overall_assessment": "PASS",
-    "recommendations": [
-      "Consider explicit HTML sanitization (e.g., DOMPurify) on the 'content' field of ChatMessage during parsing or before rendering to mitigate potential XSS, even if it's currently text or code. The current implementation focuses on structural and size validation, but not on content-based HTML sanitization.",
-      "The 'CryptoService' is imported in parsers but its role in sanitization is not explicit; clarify or document if it contributes to content security beyond encryption."
+    "critical_findings": [
+      "The `.ai-constraints.md` file specifies 'Backend: Node.js (local-only)', while the `README.md` and `Project Concept.md` refer to the application as a 'secure, local-first desktop application' using 'Tauri' for the desktop shell. The `package.json` also shows `@tauri-apps/cli` as a dev dependency. This indicates a potential discrepancy or an incomplete understanding of how Node.js is utilized within the Tauri desktop context for local-only operations. Clarification is needed on the exact role of Node.js if it's not the primary backend.",
+      "The `types.ts` file defines `GeminiExport` and `GeminiTakeoutExport` interfaces. However, `ROADMAP.md` only mentions adding parsers for 'Gemini (.json)'. It's crucial to confirm if both formats (standard Gemini export and Google Takeout style) are intended to be supported in v0.2 to ensure comprehensive parsing capabilities and avoid ambiguity."
+    ],
+    "improvement_recommendations": [
+      "Explicitly define the architecture's backend components in more detail, clarifying the relationship between Tauri (Rust) and any Node.js components for local processing.",
+      "Ensure all file parsing scenarios, especially for diverse formats like Gemini's potential variations, are explicitly covered in the roadmap and test plans.",
+      "Add detailed documentation for cryptographic key management, including how keys are derived, stored (in memory), and securely cleared.",
+      "Expand `ROADMAP.md` with specific performance targets for critical features like initial load time, search response, and import speeds.",
+      "Implement a robust logging and error reporting mechanism (local-only, not external) to help diagnose issues in production without compromising privacy.",
+      "Consider adding pre-commit hooks to automatically run `lint`, `format:check`, and `test` to enforce code quality and consistency."
+    ],
+    "overall_assessment": "CONDITIONAL_APPROVE",
+    "approval_conditions": [
+      "Clarify the role and implementation of Node.js within the Tauri desktop application context as a 'local-only backend'.",
+      "Confirm the intended scope of Gemini parser development, specifically addressing whether both `GeminiExport` and `GeminiTakeoutExport` formats are targeted for implementation in v0.2."
     ]
   }
 }
