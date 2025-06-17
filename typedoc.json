@@ -1,0 +1,141 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "That's What I Said - API Documentation",
+  "entryPoints": [
+    "./src/lib/types.ts",
+    "./src/lib/crypto.ts",
+    "./src/lib/database.ts",
+    "./src/lib/fileImporter.ts",
+    "./src/lib/parserRegistry.ts",
+    "./src/lib/importValidation.ts",
+    "./src/lib/parsers/"
+  ],
+  "entryPointStrategy": "expand",
+  "out": "./docs/api",
+  "theme": "default",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeExternals": true,
+  "excludeNotDocumented": false,
+  "excludeInternal": true,
+  "readme": "./README.md",
+  "categorizeByGroup": true,
+  "defaultCategory": "Core",
+  "categoryOrder": [
+    "Core",
+    "Security",
+    "Parsers", 
+    "Database",
+    "Validation",
+    "Components",
+    "*"
+  ],
+  "sort": ["source-order"],
+  "kindSortOrder": [
+    "Document",
+    "Project",
+    "Module",
+    "Namespace",
+    "Enum",
+    "EnumMember", 
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Constructor",
+    "Property",
+    "Variable",
+    "Function",
+    "Method",
+    "Parameter",
+    "TypeParameter",
+    "Accessor",
+    "GetSignature",
+    "SetSignature",
+    "CallSignature",
+    "IndexSignature"
+  ],
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "visibilityFilters": {
+    "protected": true,
+    "private": false,
+    "inherited": true,
+    "external": false
+  },
+  "searchInComments": true,
+  "cleanOutputDir": true,
+  "titleLink": "https://github.com/your-username/thats-what-i-said",
+  "navigationLinks": {
+    "GitHub": "https://github.com/your-username/thats-what-i-said",
+    "CoDA Framework": "./docs/Project Orchestration Framework.md"
+  },
+  "sidebarLinks": {
+    "Security Constraints": "./ai-constraints/.ai-constraints.md",
+    "Roadmap": "./docs/ROADMAP.md",
+    "Architecture": "./docs/Technical Specifications.md"
+  },
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": false
+  },
+  "treatWarningsAsErrors": false,
+  "treatValidationWarningsAsErrors": false,
+  "pretty": true,
+  "emit": "docs",
+  "lightHighlightTheme": "light-plus",
+  "darkHighlightTheme": "dark-plus",
+  "customCss": "./docs/typedoc-custom.css",
+  "markedOptions": {
+    "tables": true,
+    "breaks": false
+  },
+  "blockTags": [
+    "@alpha",
+    "@beta", 
+    "@deprecated",
+    "@example",
+    "@experimental",
+    "@inheritDoc",
+    "@internal",
+    "@override",
+    "@packageDocumentation",
+    "@param",
+    "@privateRemarks",
+    "@public",
+    "@readonly",
+    "@remarks",
+    "@returns",
+    "@sealed",
+    "@see",
+    "@since",
+    "@throws",
+    "@typeParam",
+    "@virtual",
+    "@security",
+    "@constraint"
+  ],
+  "inlineTags": [
+    "@inheritDoc",
+    "@label",
+    "@link", 
+    "@linkcode",
+    "@linkplain"
+  ],
+  "modifierTags": [
+    "@alpha",
+    "@beta",
+    "@deprecated", 
+    "@experimental",
+    "@internal",
+    "@override",
+    "@packageDocumentation",
+    "@public",
+    "@readonly",
+    "@sealed",
+    "@virtual"
+  ]
+}

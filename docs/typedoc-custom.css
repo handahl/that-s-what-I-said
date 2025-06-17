@@ -1,0 +1,199 @@
+/**
+ * Custom TypeDoc CSS for "That's What I Said"
+ * Aligns documentation theme with application design
+ */
+
+:root {
+  --primary-blue: #3b82f6;
+  --primary-blue-dark: #2563eb;
+  --security-red: #dc2626;
+  --security-green: #059669;
+  --warning-amber: #d97706;
+  --background-gray: #f9fafb;
+  --text-gray: #374151;
+  --border-gray: #e5e7eb;
+}
+
+/* Header customization */
+.tsd-page-title {
+  background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
+  color: white;
+  padding: 2rem;
+  margin: -2rem -2rem 2rem -2rem;
+  border-radius: 8px;
+}
+
+.tsd-page-title h1 {
+  color: white;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* Security-related styling */
+.tsd-comment-tags .tsd-tag-security {
+  background-color: var(--security-red);
+  color: white;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 0 4px;
+}
+
+.tsd-comment-tags .tsd-tag-constraint {
+  background-color: var(--primary-blue);
+  color: white;
+  font-weight: bold;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin: 0 4px;
+}
+
+/* Code blocks enhancement */
+.tsd-comment code,
+.tsd-description code {
+  background-color: var(--background-gray);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-gray);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Monaco', monospace;
+  font-size: 0.9em;
+}
+
+/* Method signatures */
+.tsd-signature {
+  background-color: var(--background-gray);
+  border: 1px solid var(--border-gray);
+  border-radius: 6px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+/* Parameter documentation */
+.tsd-parameters {
+  background-color: #f8fafc;
+  border-left: 4px solid var(--primary-blue);
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+/* Return type styling */
+.tsd-returns-title {
+  color: var(--security-green);
+  font-weight: 600;
+}
+
+/* Navigation enhancements */
+.tsd-navigation a {
+  transition: all 0.2s ease;
+}
+
+.tsd-navigation a:hover {
+  color: var(--primary-blue);
+  transform: translateX(4px);
+}
+
+/* Security warnings in documentation */
+.security-warning {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1px solid #fca5a5;
+  border-left: 4px solid var(--security-red);
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 6px;
+}
+
+.security-warning::before {
+  content: "🔒 Security Notice: ";
+  font-weight: bold;
+  color: var(--security-red);
+}
+
+/* Constraint compliance indicators */
+.constraint-compliant {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1px solid #86efac;
+  border-left: 4px solid var(--security-green);
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 6px;
+}
+
+.constraint-compliant::before {
+  content: "✅ CoDA Compliant: ";
+  font-weight: bold;
+  color: var(--security-green);
+}
+
+/* Deprecation warnings */
+.tsd-flag.ts-flagDeprecated {
+  background-color: var(--warning-amber);
+  color: white;
+}
+
+/* Example code blocks */
+.tsd-example {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+.tsd-example code {
+  background: transparent;
+  color: inherit;
+  border: none;
+  padding: 0;
+}
+
+/* Interface and type styling */
+.tsd-kind-interface .tsd-signature,
+.tsd-kind-type-alias .tsd-signature {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-left: 4px solid var(--primary-blue);
+}
+
+/* Function signatures */
+.tsd-kind-function .tsd-signature {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-left: 4px solid var(--security-green);
+}
+
+/* Class styling */
+.tsd-kind-class .tsd-signature {
+  background: linear-gradient(135deg, #fefbf2 0%, #fef3c7 100%);
+  border-left: 4px solid var(--warning-amber);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .tsd-page-title {
+    margin: -1rem -1rem 1rem -1rem;
+    padding: 1rem;
+  }
+  
+  .tsd-page-title h1 {
+    font-size: 1.8rem;
+  }
+  
+  .tsd-signature {
+    overflow-x: auto;
+    font-size: 0.9em;
+  }
+}
+
+/* Print styles */
+@media print {
+  .tsd-navigation,
+  .tsd-page-toolbar {
+    display: none;
+  }
+  
+  .tsd-page-title {
+    background: none;
+    color: black;
+    border-bottom: 2px solid black;
+  }
+}
