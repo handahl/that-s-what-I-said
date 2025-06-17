@@ -12,6 +12,7 @@ import type {
   ImportResult 
 } from '../types';
 import { CryptoService } from '../crypto';
+import { contentSanitizer } from '../security/contentSanitizer.js';
 
 export class ClaudeParser {
   private crypto: CryptoService;

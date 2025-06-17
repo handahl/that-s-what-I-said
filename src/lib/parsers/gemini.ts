@@ -4,19 +4,25 @@
  * Implements strict input sanitization per security constraints
  */
 
-import type { 
+import type {
   GeminiExport,
   GeminiConversation,
   GeminiMessage,
   GeminiTakeoutExport,
   GeminiTakeoutMessage,
-  Conversation, 
-  ChatMessage, 
-  ImportResult 
+  Conversation,
+  ChatMessage,
+  ImportResult,
 } from '../types';
 import { CryptoService } from '../crypto';
+import { contentSanitizer } from '../security/contentSanitizer.js';
 
-export class GeminiParser {
+// Define a common Parser interface for consistency if not already present
+interface Parser {
+  parseGemini(fileContent: string): Promise<ImportResult>;
+}
+
+export class GeminiParser implements Parser {
   private crypto: CryptoService;
 
   constructor() {
@@ -30,17 +36,18 @@ export class GeminiParser {
     const result: ImportResult = {
       conversations: [],
       messages: [],
-      errors: []
+      errors: [],
     };
 
     try {
       // Strict JSON parsing with size limits
-      if (fileContent.length > 100 * 1024 * 1024) { // 100MB limit
+      if (fileContent.length > 100 * 1024 * 1024) {
+        // 100MB limit
         throw new Error('File too large (>100MB)');
       }
 
       const data = JSON.parse(fileContent);
-      
+
       // Detect format type and parse accordingly
       if (this.isGeminiStandardFormat(data)) {
         await this.parseStandardFormat(data, result);
@@ -49,7 +56,6 @@ export class GeminiParser {
       } else {
         throw new Error('Unrecognized Gemini format');
       }
-
     } catch (error) {
       result.errors.push(`Invalid JSON format: ${error}`);
     }
@@ -60,7 +66,10 @@ export class GeminiParser {
   /**
    * Parse standard Gemini format with conversations array
    */
-  private async parseStandardFormat(data: GeminiExport, result: ImportResult): Promise<void> {
+  private async parseStandardFormat(
+    data: GeminiExport,
+    result: ImportResult,
+  ): Promise<void> {
     if (!Array.isArray(data.conversations)) {
       throw new Error('Invalid conversations array');
     }
@@ -84,7 +93,10 @@ export class GeminiParser {
   /**
    * Parse Google Takeout format (single conversation or array)
    */
-  private async parseTakeoutFormat(data: GeminiTakeoutExport | GeminiTakeoutExport[], result: ImportResult): Promise<void> {
+  private async parseTakeoutFormat(
+    data: GeminiTakeoutExport | GeminiTakeoutExport[],
+    result: ImportResult,
+  ): Promise<void> {
     const conversations = Array.isArray(data) ? data : [data];
 
     // Validate array size to prevent DoS
@@ -106,13 +118,18 @@ export class GeminiParser {
   /**
    * Parse a single standard Gemini conversation
    */
-  private parseStandardConversation(data: GeminiConversation): { conversation: Conversation; messages: ChatMessage[] } {
+  private parseStandardConversation(
+    data: GeminiConversation,
+  ): { conversation: Conversation; messages: ChatMessage[] } {
     // Enhanced input validation
     this.validateStandardConversationStructure(data);
 
     // Extract and validate messages
-    const messages = this.extractStandardMessages(data.messages, data.conversation_id);
-    
+    const messages = this.extractStandardMessages(
+      data.messages,
+      data.conversation_id,
+    );
+
     if (messages.length === 0) {
       throw new Error('No valid messages found in conversation');
     }
@@ -123,7 +140,7 @@ export class GeminiParser {
     }
 
     // Calculate conversation time bounds
-    const timestamps = messages.map(m => m.timestamp_utc);
+    const timestamps = messages.map((m) => m.timestamp_utc);
     const startTime = Math.min(...timestamps);
     const endTime = Math.max(...timestamps);
 
@@ -140,10 +157,13 @@ export class GeminiParser {
       id: this.sanitizeString(data.conversation_id, 255),
       source_app: 'Google Gemini',
       chat_type: 'llm',
-      display_name: this.sanitizeString(data.conversation_title || 'Untitled Gemini Chat', 500),
+      display_name: this.sanitizeString(
+        data.conversation_title || 'Untitled Gemini Chat',
+        500,
+      ),
       start_time: Math.min(startTime, createTimestamp),
       end_time: Math.max(endTime, updateTimestamp),
-      tags: []
+      tags: [],
     };
 
     return { conversation, messages };
@@ -152,13 +172,15 @@ export class GeminiParser {
   /**
    * Parse a single Takeout format conversation
    */
-  private parseTakeoutConversation(data: GeminiTakeoutExport): { conversation: Conversation; messages: ChatMessage[] } {
+  private parseTakeoutConversation(
+    data: GeminiTakeoutExport,
+  ): { conversation: Conversation; messages: ChatMessage[] } {
     // Enhanced input validation
     this.validateTakeoutConversationStructure(data);
 
     // Extract and validate messages
     const messages = this.extractTakeoutMessages(data.messages, data.id);
-    
+
     if (messages.length === 0) {
       throw new Error('No valid messages found in conversation');
     }
@@ -169,7 +191,7 @@ export class GeminiParser {
     }
 
     // Calculate conversation time bounds
-    const timestamps = messages.map(m => m.timestamp_utc);
+    const timestamps = messages.map((m) => m.timestamp_utc);
     const startTime = Math.min(...timestamps);
     const endTime = Math.max(...timestamps);
 
@@ -189,7 +211,7 @@ export class GeminiParser {
       display_name: this.sanitizeString(data.name || 'Untitled Gemini Chat', 500),
       start_time: Math.min(startTime, createTimestamp),
       end_time: Math.max(endTime, updateTimestamp),
-      tags: []
+      tags: [],
     };
 
     return { conversation, messages };
@@ -198,46 +220,22 @@ export class GeminiParser {
   /**
    * Extract messages from standard Gemini format
    */
-  private extractStandardMessages(geminiMessages: GeminiMessage[], conversationId: string): ChatMessage[] {
+  private extractStandardMessages(
+    geminiMessages: GeminiMessage[],
+    conversationId: string,
+  ): ChatMessage[] {
     const messages: ChatMessage[] = [];
 
     for (const geminiMessage of geminiMessages) {
       try {
-        // Enhanced message validation
-        if (!this.isValidStandardMessage(geminiMessage)) {
-          continue;
-        }
-
-        // Parse timestamp
-        const timestamp = this.parseISOTimestamp(geminiMessage.create_time);
-
-        // Map author to unified format
-        const author = this.mapGeminiAuthor(geminiMessage.author.name);
-        
-        // Sanitize content
-        const content = this.sanitizeContent(geminiMessage.text || '');
-        
-        // Skip empty messages after sanitization
-        if (!content.trim()) continue;
-
-        // Determine content type
-        const contentType = this.determineContentType(content);
-
-        // Generate secure message ID
-        const messageId = this.crypto.generateHash(content, timestamp);
-
-        messages.push({
-          message_id: messageId,
-          conversation_id: conversationId,
-          timestamp_utc: timestamp,
-          author: this.sanitizeString(author, 100),
-          content: content,
-          content_type: contentType
-        });
-
+        const processedMessage = this.processStandardMessage(
+          geminiMessage,
+          conversationId,
+        );
+        messages.push(processedMessage);
       } catch (error) {
         // Log individual message parsing errors but continue processing
-        console.warn(`Failed to parse Gemini message:`, error);
+        console.warn(`Failed to parse Gemini standard message:`, error);
         continue;
       }
     }
@@ -249,46 +247,22 @@ export class GeminiParser {
   /**
    * Extract messages from Takeout format
    */
-  private extractTakeoutMessages(geminiMessages: GeminiTakeoutMessage[], conversationId: string): ChatMessage[] {
+  private extractTakeoutMessages(
+    geminiMessages: GeminiTakeoutMessage[],
+    conversationId: string,
+  ): ChatMessage[] {
     const messages: ChatMessage[] = [];
 
     for (const geminiMessage of geminiMessages) {
       try {
-        // Enhanced message validation
-        if (!this.isValidTakeoutMessage(geminiMessage)) {
-          continue;
-        }
-
-        // Parse timestamp
-        const timestamp = this.parseISOTimestamp(geminiMessage.created_date);
-
-        // Map author to unified format
-        const author = this.mapGeminiAuthor(geminiMessage.creator.name);
-        
-        // Sanitize content
-        const content = this.sanitizeContent(geminiMessage.content || '');
-        
-        // Skip empty messages after sanitization
-        if (!content.trim()) continue;
-
-        // Determine content type
-        const contentType = this.determineContentType(content);
-
-        // Generate secure message ID
-        const messageId = this.crypto.generateHash(content, timestamp);
-
-        messages.push({
-          message_id: messageId,
-          conversation_id: conversationId,
-          timestamp_utc: timestamp,
-          author: this.sanitizeString(author, 100),
-          content: content,
-          content_type: contentType
-        });
-
+        const processedMessage = this.processTakeoutMessage(
+          geminiMessage,
+          conversationId,
+        );
+        messages.push(processedMessage);
       } catch (error) {
         // Log individual message parsing errors but continue processing
-        console.warn(`Failed to parse Gemini message:`, error);
+        console.warn(`Failed to parse Gemini Takeout message:`, error);
         continue;
       }
     }
@@ -298,28 +272,124 @@ export class GeminiParser {
   }
 
   /**
+   * Processes a raw standard Gemini message into a unified ChatMessage format with sanitization.
+   */
+  private processStandardMessage(
+    rawMessage: GeminiMessage,
+    conversationId: string,
+  ): ChatMessage {
+    if (!this.isValidStandardMessage(rawMessage)) {
+      throw new Error('Invalid standard Gemini message structure');
+    }
+
+    const timestamp = this.parseISOTimestamp(rawMessage.create_time);
+    const author = this.mapGeminiAuthor(rawMessage.author.name);
+    const rawContent = rawMessage.text || '';
+
+    // SECURITY: Sanitize content using contentSanitizer
+    const sanitizedContent = contentSanitizer.sanitizeChatContent(rawContent);
+
+    // Determine if content is code and apply code-specific sanitization if needed
+    const isCodeContent = this.detectCodeContent(sanitizedContent);
+    const finalContent = isCodeContent
+      ? contentSanitizer.sanitizeCodeContent(sanitizedContent)
+      : sanitizedContent;
+
+    if (!finalContent.trim()) {
+      throw new Error('Message content is empty after sanitization');
+    }
+
+    const messageId = this.crypto.generateHash(finalContent, timestamp);
+
+    return {
+      message_id: messageId,
+      conversation_id: conversationId,
+      timestamp_utc: timestamp,
+      author: this.sanitizeString(author, 100),
+      content: finalContent,
+      content_type: isCodeContent ? 'code' : 'text',
+      metadata: {
+        originalAuthor: rawMessage.author.name,
+        sanitized: true,
+        contentType: isCodeContent ? 'code' : 'text',
+      },
+    };
+  }
+
+  /**
+   * Processes a raw Gemini Takeout message into a unified ChatMessage format with sanitization.
+   */
+  private processTakeoutMessage(
+    rawMessage: GeminiTakeoutMessage,
+    conversationId: string,
+  ): ChatMessage {
+    if (!this.isValidTakeoutMessage(rawMessage)) {
+      throw new Error('Invalid Takeout Gemini message structure');
+    }
+
+    const timestamp = this.parseISOTimestamp(rawMessage.created_date);
+    const author = this.mapGeminiAuthor(rawMessage.creator.name);
+    const rawContent = rawMessage.content || '';
+
+    // SECURITY: Sanitize content using contentSanitizer
+    const sanitizedContent = contentSanitizer.sanitizeChatContent(rawContent);
+
+    // Determine if content is code and apply code-specific sanitization if needed
+    const isCodeContent = this.detectCodeContent(sanitizedContent);
+    const finalContent = isCodeContent
+      ? contentSanitizer.sanitizeCodeContent(sanitizedContent)
+      : sanitizedContent;
+
+    if (!finalContent.trim()) {
+      throw new Error('Message content is empty after sanitization');
+    }
+
+    const messageId = this.crypto.generateHash(finalContent, timestamp);
+
+    return {
+      message_id: messageId,
+      conversation_id: conversationId,
+      timestamp_utc: timestamp,
+      author: this.sanitizeString(author, 100),
+      content: finalContent,
+      content_type: isCodeContent ? 'code' : 'text',
+      metadata: {
+        originalAuthor: rawMessage.creator.name,
+        sanitized: true,
+        contentType: isCodeContent ? 'code' : 'text',
+      },
+    };
+  }
+
+  /**
    * Detect if data is standard Gemini format
    */
   private isGeminiStandardFormat(data: any): data is GeminiExport {
-    return data && 
-           typeof data === 'object' && 
-           Array.isArray(data.conversations) &&
-           data.conversations.length > 0 &&
-           data.conversations[0].conversation_id !== undefined;
+    return (
+      data &&
+      typeof data === 'object' &&
+      Array.isArray(data.conversations) &&
+      data.conversations.length > 0 &&
+      data.conversations[0].conversation_id !== undefined
+    );
   }
 
   /**
    * Detect if data is Gemini Takeout format
    */
-  private isGeminiTakeoutFormat(data: any): data is GeminiTakeoutExport | GeminiTakeoutExport[] {
+  private isGeminiTakeoutFormat(
+    data: any,
+  ): data is GeminiTakeoutExport | GeminiTakeoutExport[] {
     const items = Array.isArray(data) ? data : [data];
-    return items.length > 0 &&
-           items[0] &&
-           typeof items[0] === 'object' &&
-           (items[0].id !== undefined || items[0].name !== undefined) &&
-           Array.isArray(items[0].messages) &&
-           items[0].messages.length > 0 &&
-           items[0].messages[0].creator !== undefined;
+    return (
+      items.length > 0 &&
+      items[0] &&
+      typeof items[0] === 'object' &&
+      (items[0].id !== undefined || items[0].name !== undefined) &&
+      Array.isArray(items[0].messages) &&
+      items[0].messages.length > 0 &&
+      items[0].messages[0].creator !== undefined
+    );
   }
 
   /**
@@ -395,11 +465,13 @@ export class GeminiParser {
    */
   private isValidStandardMessage(message: any): boolean {
     if (!message || typeof message !== 'object') return false;
-    if (!message.create_time || typeof message.create_time !== 'string') return false;
-    if (!message.text || typeof message.text !== 'string') return false;
+    if (!message.create_time || typeof message.create_time !== 'string')
+      return false;
+    if (typeof message.text !== 'string') return false; // text can be empty, but must be a string
     if (!message.author || typeof message.author !== 'object') return false;
-    if (!message.author.name || typeof message.author.name !== 'string') return false;
-    
+    if (!message.author.name || typeof message.author.name !== 'string')
+      return false;
+
     return true;
   }
 
@@ -408,11 +480,13 @@ export class GeminiParser {
    */
   private isValidTakeoutMessage(message: any): boolean {
     if (!message || typeof message !== 'object') return false;
-    if (!message.created_date || typeof message.created_date !== 'string') return false;
-    if (!message.content || typeof message.content !== 'string') return false;
+    if (!message.created_date || typeof message.created_date !== 'string')
+      return false;
+    if (typeof message.content !== 'string') return false; // content can be empty, but must be a string
     if (!message.creator || typeof message.creator !== 'object') return false;
-    if (!message.creator.name || typeof message.creator.name !== 'string') return false;
-    
+    if (!message.creator.name || typeof message.creator.name !== 'string')
+      return false;
+
     return true;
   }
 
@@ -425,14 +499,14 @@ export class GeminiParser {
       if (isNaN(date.getTime())) {
         throw new Error('Invalid date format');
       }
-      
+
       const timestamp = Math.floor(date.getTime() / 1000);
-      
+
       // Validate timestamp is reasonable (not negative, not too far in future)
       if (timestamp < 0 || timestamp > Date.now() / 1000 + 86400) {
         throw new Error('Timestamp out of valid range');
       }
-      
+
       return timestamp;
     } catch (error) {
       throw new Error(`Failed to parse timestamp "${isoString}": ${error}`);
@@ -444,30 +518,35 @@ export class GeminiParser {
    */
   private mapGeminiAuthor(authorName: string): string {
     if (typeof authorName !== 'string') return 'Unknown';
-    
+
     const normalizedName = authorName.toLowerCase().trim();
-    
+
     // Common Gemini role patterns
-    if (normalizedName.includes('gemini') || 
-        normalizedName.includes('bard') || 
-        normalizedName === 'model' ||
-        normalizedName === 'assistant' ||
-        normalizedName === 'ai') {
+    if (
+      normalizedName.includes('gemini') ||
+      normalizedName.includes('bard') ||
+      normalizedName === 'model' ||
+      normalizedName === 'assistant' ||
+      normalizedName === 'ai'
+    ) {
       return 'Gemini';
     }
-    
-    if (normalizedName === 'user' || 
-        normalizedName === 'human' ||
-        normalizedName.includes('you')) {
+
+    if (
+      normalizedName === 'user' ||
+      normalizedName === 'human' ||
+      normalizedName.includes('you')
+    ) {
       return 'User';
     }
-    
+
     // Return sanitized original name for other cases
     return this.sanitizeString(authorName, 50);
   }
 
   /**
    * Sanitize string input with length limits and dangerous character removal
+   * (Kept as a general utility, but for chat/code content, prefer contentSanitizer)
    */
   private sanitizeString(input: string, maxLength: number): string {
     if (typeof input !== 'string') {
@@ -476,51 +555,32 @@ export class GeminiParser {
 
     // Remove null bytes and control characters except newlines/tabs
     let sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-    
+
     // Trim and limit length
     sanitized = sanitized.trim().substring(0, maxLength);
-    
+
     return sanitized;
   }
 
   /**
-   * Sanitize content with enhanced security checks
+   * Detect if content appears to be code/technical content
+   * @param content Message content
+   * @returns true if content appears to be code
    */
-  private sanitizeContent(content: string): string {
-    if (typeof content !== 'string') return '';
-    
-    // Content size limit (1MB per message)
-    if (content.length > 1024 * 1024) {
-      content = content.substring(0, 1024 * 1024);
-    }
-
-    // Remove dangerous control characters but preserve formatting
-    return content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-  }
-
-  /**
-   * Determine content type with enhanced pattern matching
-   */
-  private determineContentType(content: string): 'text' | 'code' {
-    // Enhanced code detection patterns
-    const codePatterns = [
-      /```[\s\S]*?```/g, // Code blocks
-      /`[^`\n]+`/g, // Inline code
-      /^\s*(?:function|class|def|import|from|const|let|var|if|for|while|return)\s/m, // Code keywords
-      /^\s*[{}\[\]();]/m, // Code punctuation at line start
-      /^\s*(?:\/\/|\/\*|\#|<!--)/m, // Comment patterns
-      /(?:npm|pip|cargo|go get)\s+install/i, // Package manager commands
+  private detectCodeContent(content: string): boolean {
+    const codeIndicators = [
+      /```[\s\S]*```/, // Code blocks
+      /`[^`]+`/, // Inline code
+      /function\s+\w+\s*\(/, // Function definitions
+      /class\s+\w+/, // Class definitions
+      /import\s+.*from/, // Import statements
+      /console\.(log|error)/, // Console statements
+      /<\w+[^>]*>/, // HTML/XML tags
       /^\s*(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s/im, // SQL keywords
-      /^\s*(?:print|console\.log|echo|printf)\s*\(/m, // Print statements
+      /^\s*(?:print|console\.log|echo|printf)\s*\(/m, // Common print statements
     ];
 
-    for (const pattern of codePatterns) {
-      if (pattern.test(content)) {
-        return 'code';
-      }
-    }
-
-    return 'text';
+    return codeIndicators.some((pattern) => pattern.test(content));
   }
 
   /**
@@ -538,7 +598,7 @@ export class GeminiParser {
       }
 
       const data = JSON.parse(content);
-      
+
       // Check if it's either format
       if (!this.isGeminiStandardFormat(data) && !this.isGeminiTakeoutFormat(data)) {
         return { isValid: false, error: 'Not a valid Gemini format' };
@@ -560,7 +620,7 @@ export class GeminiParser {
         }
       } else {
         const conversations = Array.isArray(data) ? data : [data];
-        
+
         if (conversations.length > 10000) {
           return { isValid: false, error: 'Too many conversations (>10,000)' };
         }
