@@ -1,0 +1,34 @@
+{
+  "expected_reports": [
+    "report-gem1-security.json",
+    "report-gem2-validation.json",
+    "report-gem3-code.json",
+    "report-gem4-review.json",
+    "report-gem5-redteam.json"
+  ],
+  "collection_session": {
+    "timestamp": "2025-06-17_12-44-30",
+    "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-44-30",
+    "source_gems_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems",
+    "collection_time": "2025-06-17T12:44:30.910Z",
+    "session_id": "gem-analysis-2025-06-17_12-44-30"
+  },
+  "collected_reports": [
+    {
+      "size_bytes": 4201,
+      "gem_name": "Red-Team",
+      "collected_filename": "05-Red-Team-20250617-124430.json",
+      "original_filename": "report-gem5-redteam.json",
+      "source_path": "C:\\Users\\shoey\\ninjazation\\GitHub\\Gems\\5 Red Team\\report-gem5-redteam.json",
+      "last_modified": "2025-06-17T12:44:19.636Z",
+      "destination_path": "C:\\Users\\shoey\\gitHub\\that-s-what-i-said\\.gem-reports\\gem-analysis-2025-06-17_12-44-30\\05-Red-Team-20250617-124430.json",
+      "gem_number": "05"
+    }
+  ],
+  "summary": {
+    "total_size_bytes": 4201,
+    "total_expected": 5,
+    "total_collected": 1,
+    "total_missing": 4
+  }
+}
