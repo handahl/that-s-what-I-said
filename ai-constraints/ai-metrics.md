@@ -47,6 +47,3 @@
 - **Unlocked DB Using Hardware Key:**
   - Binary flag for whether encryption system can support platform authenticators.
   - **Target:** Ready by v1.0
-
----
-

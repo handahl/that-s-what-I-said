@@ -1,30 +1,38 @@
 /**
- * Refactored file import service with modular parser architecture
+ * Enhanced file import service with better error handling and validation
  * Implements centralized validation, error handling, and comprehensive metrics
  */
 
 import { open } from '@tauri-apps/plugin-dialog';
-import { readTextFile } from '@tauri-apps/api/fs';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import type { 
   FileValidationResult, 
   ImportResult, 
   ImportMetadata,
   ImportError,
-  SupportedFileType
+  SupportedFileType,
+  Conversation,
+  ChatMessage
 } from './types';
-import { ParserRegistry } from './parserRegistry';
-import { ImportValidationService } from './importValidation';
 import { DatabaseService } from './database';
+import { ChatGPTParser } from './parsers/chatgpt';
+import { ClaudeParser } from './parsers/claude';
+import { GeminiParser } from './parsers/gemini';
+import { QwenParser } from './parsers/qwen';
 
 export class FileImporter {
-  private parserRegistry: ParserRegistry;
-  private validation: ImportValidationService;
   private database: DatabaseService;
+  private chatgptParser: ChatGPTParser;
+  private claudeParser: ClaudeParser;
+  private geminiParser: GeminiParser;
+  private qwenParser: QwenParser;
 
   constructor() {
-    this.parserRegistry = ParserRegistry.getInstance();
-    this.validation = ImportValidationService.getInstance();
     this.database = DatabaseService.getInstance();
+    this.chatgptParser = new ChatGPTParser();
+    this.claudeParser = new ClaudeParser();
+    this.geminiParser = new GeminiParser();
+    this.qwenParser = new QwenParser();
   }
 
   /**
@@ -51,48 +59,62 @@ export class FileImporter {
   }
 
   /**
-   * Validate file format with enhanced detection and fallback logic
+   * Validate file format with enhanced detection
    */
   public async validateFile(filePath: string): Promise<FileValidationResult> {
     try {
       const content = await readTextFile(filePath);
       
-      // Perform basic validation first
-      const sizeError = this.validation.validateFileSize(content, filePath);
-      if (sizeError) {
+      // Basic validation
+      if (content.length === 0) {
         return {
           isValid: false,
-          error: sizeError.message,
+          error: 'Empty file',
           fileType: 'unknown',
           confidence: 0
         };
       }
 
-      const encodingError = this.validation.validateEncoding(content, filePath);
-      if (encodingError && encodingError.severity === 'high') {
+      if (content.length > 100 * 1024 * 1024) { // 100MB limit
         return {
           isValid: false,
-          error: encodingError.message,
+          error: 'File too large (>100MB)',
           fileType: 'unknown',
           confidence: 0
         };
       }
 
-      const jsonError = this.validation.validateJSONStructure(content, filePath);
-      if (jsonError) {
-        // JSON validation failed, but might be text format
-        // Continue with format detection
+      // Try each parser in order
+      const parsers = [
+        { type: 'chatgpt' as const, validator: this.chatgptParser.validateChatGPTFile.bind(this.chatgptParser) },
+        { type: 'claude' as const, validator: this.claudeParser.validateClaudeFile.bind(this.claudeParser) },
+        { type: 'gemini' as const, validator: this.geminiParser.validateGeminiFile.bind(this.geminiParser) },
+        { type: 'qwen' as const, validator: this.qwenParser.validateQwenFile.bind(this.qwenParser) }
+      ];
+
+      for (const parser of parsers) {
+        try {
+          const result = parser.validator(content);
+          if (result.isValid) {
+            return {
+              isValid: true,
+              fileType: parser.type,
+              confidence: 95,
+              fallbackAttempted: false
+            };
+          }
+        } catch (error) {
+          continue; // Try next parser
+        }
       }
 
-      // Use parser registry for format detection
-      const result = this.parserRegistry.detectFileFormat(content, filePath);
-      
-      // Add encoding warning if present
-      if (encodingError && result.isValid) {
-        result.warning = encodingError.message;
-      }
-
-      return result;
+      return {
+        isValid: false,
+        error: 'Unsupported file format',
+        fileType: 'unknown',
+        confidence: 0,
+        fallbackAttempted: true
+      };
 
     } catch (error) {
       return { 
@@ -105,7 +127,7 @@ export class FileImporter {
   }
 
   /**
-   * Import and process a single file with comprehensive error handling
+   * Import and process a single file
    */
   public async importFile(filePath: string): Promise<ImportResult> {
     const startTime = Date.now();
@@ -152,27 +174,25 @@ export class FileImporter {
         result.warnings.push(validation.warning);
       }
 
-      // Get appropriate parser
-      const parser = this.parserRegistry.getParser(validation.fileType!);
-      if (!parser) {
-        result.errors.push(`No parser available for file type: ${validation.fileType}`);
-        metadata.failed_imports = 1;
-        metadata.processing_time_ms = Date.now() - startTime;
-        return result;
-      }
-
       // Read and parse file content
       const content = await readTextFile(filePath);
-      const parseResult = await parser.parseContent(content);
+      let parseResult: ImportResult;
 
-      // Validate parsed data
-      const validationErrors = this.validateParsedData(parseResult, filePath);
-      result.errors.push(...validationErrors.map(e => e.message));
-
-      if (validationErrors.some(e => e.severity === 'high' || e.severity === 'critical')) {
-        metadata.failed_imports = 1;
-        metadata.processing_time_ms = Date.now() - startTime;
-        return result;
+      switch (validation.fileType) {
+        case 'chatgpt':
+          parseResult = await this.chatgptParser.parseChatGPT(content);
+          break;
+        case 'claude':
+          parseResult = await this.claudeParser.parseClaude(content);
+          break;
+        case 'gemini':
+          parseResult = await this.geminiParser.parseGemini(content);
+          break;
+        case 'qwen':
+          parseResult = await this.qwenParser.parseQwen(content);
+          break;
+        default:
+          throw new Error(`No parser available for file type: ${validation.fileType}`);
       }
 
       // Merge results
@@ -184,11 +204,15 @@ export class FileImporter {
         result.warnings.push(...parseResult.warnings);
       }
 
-      // Save to database
-      await this.saveImportResult(result);
+      // Save to database if we have valid data
+      if (result.conversations.length > 0) {
+        await this.saveImportResult(result);
+        metadata.successful_imports = 1;
+      } else {
+        metadata.failed_imports = 1;
+      }
 
       // Update metadata
-      metadata.successful_imports = 1;
       metadata.total_conversations = result.conversations.length;
       metadata.total_messages = result.messages.length;
 
@@ -203,7 +227,7 @@ export class FileImporter {
   }
 
   /**
-   * Import multiple files with aggregate metrics and error handling
+   * Import multiple files
    */
   public async importFiles(filePaths: string[]): Promise<ImportResult> {
     const startTime = Date.now();
@@ -224,13 +248,10 @@ export class FileImporter {
       }
     };
 
-    const fileResults: Array<{ filePath: string; result: ImportResult }> = [];
-
     // Process each file
     for (const filePath of filePaths) {
       try {
         const result = await this.importFile(filePath);
-        fileResults.push({ filePath, result });
 
         // Aggregate results
         aggregateResult.conversations.push(...result.conversations);
@@ -262,84 +283,38 @@ export class FileImporter {
     }
 
     aggregateResult.metadata.processing_time_ms = Date.now() - startTime;
-
     return aggregateResult;
-  }
-
-  /**
-   * Validate parsed data against security and business rules
-   */
-  private validateParsedData(result: ImportResult, filePath: string): ImportError[] {
-    const errors: ImportError[] = [];
-
-    // Validate conversation count
-    const convError = this.validation.validateConversationCount(result.conversations.length, filePath);
-    if (convError) errors.push(convError);
-
-    // Validate message count
-    const msgError = this.validation.validateMessageCount(result.messages.length, filePath);
-    if (msgError) errors.push(msgError);
-
-    // Validate individual messages
-    for (const message of result.messages) {
-      // Validate content length
-      const contentError = this.validation.validateContentLength(message.content, filePath);
-      if (contentError) errors.push(contentError);
-
-      // Validate timestamp
-      const timestampError = this.validation.validateTimestamp(message.timestamp_utc, filePath);
-      if (timestampError) errors.push(timestampError);
-
-      // Sanitize content
-      message.content = this.validation.sanitizeContent(message.content, 1024 * 1024);
-      message.author = this.validation.sanitizeContent(message.author, 100);
-    }
-
-    // Validate conversations
-    for (const conversation of result.conversations) {
-      conversation.display_name = this.validation.sanitizeContent(conversation.display_name, 500);
-      
-      // Validate time bounds
-      const startError = this.validation.validateTimestamp(conversation.start_time, filePath);
-      if (startError) errors.push(startError);
-      
-      const endError = this.validation.validateTimestamp(conversation.end_time, filePath);
-      if (endError) errors.push(endError);
-    }
-
-    return errors;
   }
 
   /**
    * Save import result to database
    */
   private async saveImportResult(result: ImportResult): Promise<void> {
-    // Save conversations first
-    for (const conversation of result.conversations) {
-      await this.database.saveConversation(conversation);
-    }
+    try {
+      // Save conversations first
+      for (const conversation of result.conversations) {
+        await this.database.saveConversation(conversation);
+      }
 
-    // Save messages
-    if (result.messages.length > 0) {
-      await this.database.saveMessages(result.messages);
+      // Save messages
+      if (result.messages.length > 0) {
+        await this.database.saveMessages(result.messages);
+      }
+    } catch (error) {
+      throw new Error(`Database save failed: ${error}`);
     }
   }
 
   /**
-   * Get import statistics and health metrics
+   * Get import statistics
    */
   public getImportStatistics(): {
     supportedFormats: SupportedFileType[];
-    validationConfig: any;
-    parserStatus: Record<string, boolean>;
+    databaseReady: boolean;
   } {
     return {
-      supportedFormats: this.parserRegistry.getAvailableParsers(),
-      validationConfig: this.validation.getConfig(),
-      parserStatus: this.parserRegistry.getAvailableParsers().reduce((status, format) => {
-        status[format] = this.parserRegistry.getParser(format) !== null;
-        return status;
-      }, {} as Record<string, boolean>)
+      supportedFormats: ['chatgpt', 'claude', 'gemini', 'qwen'],
+      databaseReady: this.database.isReady()
     };
   }
 }

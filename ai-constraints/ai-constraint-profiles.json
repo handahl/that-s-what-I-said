@@ -1,7 +1,13 @@
-{ "profiles": { "minimal-prototype": { "description": "Rapid prototyping with essential safety", "constraints": [ "SEC-LOCAL-ONLY", "CQ-TS-001", "SEC-CRYPTO-003\:basic", "QA-TDG-002\:minCoverage=50" ], "ai\_guidance": "Favor speed and local-only testing; skip encryption wrappers unless parsing sensitive info." },
+{ "profiles": { 
+  
+"minimal-prototype": { 
+    "description": "Rapid prototyping with essential safety", 
+    "constraints": [ "SEC-LOCAL-ONLY", "CQ-TS-001", "SEC-CRYPTO-003:basic", "QA-TDG-002:minCoverage=50" 
+  ], 
+    "ai_guidance": "Favor speed and local-only testing; skip encryption wrappers unless parsing sensitive info." 
+  },
 
-```
-"mvp-secure": {
+  "mvp-secure": {
   "description": "First deployable secure MVP",
   "constraints": [
     "SEC-LOCAL-ONLY",
@@ -30,7 +36,5 @@
   ],
   "ai_guidance": "Enforce hardware-backed cryptographic unlocking. No fallback passwords allowed. Prepare proof obligations for secure deletion and decryption consistency."
 }
-```
-
-} }
-
+} 
+}
