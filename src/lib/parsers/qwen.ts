@@ -701,8 +701,8 @@ export class QwenParser implements Parser {
     return sanitized;
   }
 
-  /**
-   * Determine content type with enhanced pattern matching, including Chinese programming terms.
+ /**
+   * Detect if content is code based on patterns
    */
   private detectCodeContent(content: string): 'text' | 'code' {
     // Enhanced code detection patterns including Chinese programming terms
@@ -711,4 +711,85 @@ export class QwenParser implements Parser {
       /`[^`\n]+`/g, // Inline code
       /^\s*(?:function|class|def|import|from|const|let|var|if|for|while|return)\s/m, // Code keywords
       /^\s*[{}\[\]();]/m, // Code punctuation at line start
-      /^\s*(?:\/\/|\/\*|#|
+      /^\s*(?:\/\/|\/\*|#|%|<!--).*$/m, // Comments (JS, CSS, Python, Shell, MATLAB, HTML)
+      /^\s*(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP)\s/im, // SQL keywords
+      /^\s*(?:print|console\.log|echo|printf|System\.out\.println)\s*\(/m, // Print statements
+      /(?:function|class|def|var|let|const|import|export)\s+\w+/m, // Declarations
+      /\w+\s*\([^)]*\)\s*{/, // Function calls with blocks
+      /^\s*(?:public|private|protected|static|final|abstract)\s+/m, // Access modifiers
+      /(?:==|!=|<=|>=|&&|\|\||->|=>|::)/m, // Operators
+      /^\s*(?:if|else|elif|for|while|do|switch|case|try|catch|finally|with|async|await)\s*[\(\{]/m, // Control structures
+      /(?:int|str|bool|float|double|char|void|String|boolean|Number)\s+\w+/m, // Type declarations
+      /(?:\.js|\.py|\.java|\.cpp|\.c|\.php|\.rb|\.go|\.rs|\.ts|\.jsx|\.tsx)$/m, // File extensions
+      /^\s*(?:import|require|include|use|namespace)\s+/m, // Import statements
+      /(?:\$\w+|\@\w+|&\w+)/m, // Variable prefixes (PHP, Perl, etc.)
+    ];
+
+    // Check if content matches any code patterns
+    for (const pattern of codePatterns) {
+      if (pattern.test(content)) {
+        return 'code';
+      }
+    }
+
+    // Check for high density of technical punctuation
+    const technicalChars = (content.match(/[{}()\[\];:=<>!&|+\-*\/]/g) || []).length;
+    const contentLength = content.length;
+    
+    if (contentLength > 0 && (technicalChars / contentLength) > 0.1) {
+      return 'code';
+    }
+
+    // Check for indentation patterns (common in code)
+    const lines = content.split('\n');
+    const indentedLines = lines.filter(line => /^\s{2,}/.test(line));
+    
+    if (lines.length > 2 && (indentedLines.length / lines.length) > 0.3) {
+      return 'code';
+    }
+
+    return 'text';
+  }
+
+  /**
+   * Sanitize string input with length limits and dangerous character removal
+   */
+  private sanitizeString(input: string, maxLength: number): string {
+    if (typeof input !== 'string') {
+      throw new Error('Input must be a string');
+    }
+
+    // Remove null bytes and control characters except newlines/tabs
+    let sanitized = input.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+    // Trim and limit length
+    sanitized = sanitized.trim().substring(0, maxLength);
+
+    return sanitized;
+  }
+
+  /**
+   * Validate Qwen file format
+   */
+  public validateQwenFile(content: string): { isValid: boolean; error?: string } {
+    try {
+      if (!content || content.trim().length === 0) {
+        return { isValid: false, error: 'Empty file content' };
+      }
+
+      // Check if it's JSON format
+      if (this.isQwenJSONFormat(content)) {
+        return { isValid: true };
+      }
+
+      // Check if it's text log format
+      if (this.isQwenTextLogFormat(content)) {
+        return { isValid: true };
+      }
+
+      return { isValid: false, error: 'Unrecognized Qwen format' };
+    } catch (error) {
+      return { isValid: false, error: `Validation failed: ${error}` };
+    }
+  }
+}

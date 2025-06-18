@@ -1,6 +1,6 @@
 <!-- src/lib/components/ConversationCard.svelte -->
 <script>
-    import { contentSanitizer } from '../security/contentSanitizer.js';
+    import { contentSanitizer } from '../security/contentSanitizer';
     
     export let message; // ChatMessage object
     

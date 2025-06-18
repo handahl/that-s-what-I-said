@@ -1,5 +1,6 @@
 // src/lib/security/contentSanitizer.ts
 import DOMPurify from 'dompurify';
+import { browser } from '$app/environment';
 
 /**
  * Content Sanitization Service
@@ -10,11 +11,15 @@ import DOMPurify from 'dompurify';
  */
 export class ContentSanitizer {
     private static instance: ContentSanitizer;
-    private purifier: typeof DOMPurify;
+    private purifier: typeof DOMPurify | null = null;
+    private isConfigured = false;
 
     private constructor() {
-        this.purifier = DOMPurify;
-        this.configurePurifier();
+        // Only initialize in browser environment
+        if (browser) {
+            this.purifier = DOMPurify;
+            this.configurePurifier();
+        }
     }
 
     public static getInstance(): ContentSanitizer {
@@ -29,29 +34,39 @@ export class ContentSanitizer {
      * @security Whitelist-based approach, deny by default
      */
     private configurePurifier(): void {
-        // Configure for secure defaults
-        this.purifier.setConfig({
-            // Allow only safe HTML elements for chat formatting
-            ALLOWED_TAGS: [
-                'b', 'i', 'em', 'strong', 'code', 'pre', 
-                'blockquote', 'p', 'br', 'ul', 'ol', 'li'
-            ],
+        if (!this.purifier || !browser) {
+            return;
+        }
+
+        try {
+            // Configure for secure defaults
+            this.purifier.setConfig({
+                // Allow only safe HTML elements for chat formatting
+                ALLOWED_TAGS: [
+                    'b', 'i', 'em', 'strong', 'code', 'pre', 
+                    'blockquote', 'p', 'br', 'ul', 'ol', 'li'
+                ],
+                
+                // Allow minimal safe attributes
+                ALLOWED_ATTR: ['class'],
+                
+                // Security settings
+                FORBID_SCRIPTS: true,
+                FORBID_ATTR: ['onclick', 'onload', 'onerror', 'style'],
+                ALLOW_DATA_ATTR: false,
+                SANITIZE_DOM: true,
+                KEEP_CONTENT: true,
+                
+                // Return strings, not DOM nodes
+                RETURN_DOM: false,
+                RETURN_DOM_FRAGMENT: false,
+                RETURN_DOM_IMPORT: false
+            });
             
-            // Allow minimal safe attributes
-            ALLOWED_ATTR: ['class'],
-            
-            // Security settings
-            FORBID_SCRIPTS: true,
-            FORBID_ATTR: ['onclick', 'onload', 'onerror', 'style'],
-            ALLOW_DATA_ATTR: false,
-            SANITIZE_DOM: true,
-            KEEP_CONTENT: true,
-            
-            // Return strings, not DOM nodes
-            RETURN_DOM: false,
-            RETURN_DOM_FRAGMENT: false,
-            RETURN_DOM_IMPORT: false
-        });
+            this.isConfigured = true;
+        } catch (error) {
+            console.warn('DOMPurify configuration failed:', error);
+        }
     }
 
     /**
@@ -65,8 +80,13 @@ export class ContentSanitizer {
             return '';
         }
 
+        // Server-side: basic sanitization without DOM
+        if (!browser || !this.purifier) {
+            return this.basicServerSideSanitization(content);
+        }
+
         try {
-            // Apply DOMPurify sanitization
+            // Browser-side: full DOMPurify sanitization
             const sanitized = this.purifier.sanitize(content);
             
             // Additional validation for chat-specific patterns
@@ -74,9 +94,38 @@ export class ContentSanitizer {
             
         } catch (error) {
             console.error('Content sanitization failed:', error);
-            // Return empty string on sanitization failure (fail secure)
-            return '';
+            // Fallback to basic sanitization
+            return this.basicServerSideSanitization(content);
         }
+    }
+
+    /**
+     * Server-side basic sanitization for SSR
+     * @param content Raw content
+     * @returns Basic sanitized content
+     */
+    private basicServerSideSanitization(content: string): string {
+        if (!content) return '';
+
+        // Basic XSS prevention for server-side rendering
+        let sanitized = content
+            // Remove script tags
+            .replace(/<script[^>]*>.*?<\/script>/gis, '')
+            // Remove javascript: URLs
+            .replace(/javascript:/gi, '')
+            // Remove data URLs
+            .replace(/data:text\/html/gi, '')
+            // Remove event handlers
+            .replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '')
+            // Remove style attributes (basic)
+            .replace(/\s*style\s*=\s*["'][^"']*["']/gi, '');
+
+        // Length limit
+        if (sanitized.length > 50000) {
+            sanitized = sanitized.substring(0, 50000) + '... [Content truncated for security]';
+        }
+
+        return sanitized;
     }
 
     /**
@@ -89,8 +138,13 @@ export class ContentSanitizer {
             return '';
         }
 
+        // Server-side: basic sanitization
+        if (!browser || !this.purifier) {
+            return this.basicServerSideSanitization(code);
+        }
+
         try {
-            // More permissive config for code content
+            // Browser-side: DOMPurify with code-specific config
             const codeSanitized = this.purifier.sanitize(code, {
                 ALLOWED_TAGS: ['code', 'pre', 'span'],
                 ALLOWED_ATTR: ['class'],
@@ -101,7 +155,7 @@ export class ContentSanitizer {
             return codeSanitized;
         } catch (error) {
             console.error('Code sanitization failed:', error);
-            return '';
+            return this.basicServerSideSanitization(code);
         }
     }
 
@@ -145,6 +199,13 @@ export class ContentSanitizer {
             .substring(0, 255);            // Filename length limit
 
         return sanitized || 'untitled';
+    }
+
+    /**
+     * Check if running in browser with full sanitization available
+     */
+    public isFullSanitizationAvailable(): boolean {
+        return browser && this.purifier !== null && this.isConfigured;
     }
 }
 
